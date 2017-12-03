@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $InformationPreference = "Continue"
 
 
-class VmssEnvironment {
+class ClusterEnvironment {
     # naming this 'Environment' causes conflicts with System.Environment
 
     [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -16,11 +16,11 @@ class VmssEnvironment {
     [ValidatePattern("^[A-Z][A-z0-9]+$")]
     [string]$Region
 
-    VmssEnvironment([string]$Id) {
+    ClusterEnvironment([string]$Id) {
         ($this.ServiceName, $this.FlightingRing, $this.Region) = $Id -split "-"
     }
 
-    VmssEnvironment([string]$ServiceName, [string]$FlightingRing, [string]$Region) {
+    ClusterEnvironment([string]$ServiceName, [string]$FlightingRing, [string]$Region) {
         $this.ServiceName = $ServiceName
         $this.FlightingRing = $FlightingRing
         $this.Region = $Region
@@ -35,26 +35,26 @@ class VmssEnvironment {
 
 class Cluster {
 
-    [VmssEnvironment]$VmssEnvironment
+    [ClusterEnvironment]$ClusterEnvironment
     [int]$Index
 
     Cluster([string]$ServiceName, [string]$FlightingRing, [string]$Region, [int]$Index) {
-        $this.VmssEnvironment = [VmssEnvironment]::new($ServiceName, $FlightingRing, $Region)
+        $this.ClusterEnvironment = [ClusterEnvironment]::new($ServiceName, $FlightingRing, $Region)
         $this.Index = $Index
     }
 
-    Cluster([VmssEnvironment]$VmssEnvironment, [int]$Index) {
-        $this.VmssEnvironment = $VmssEnvironment
+    Cluster([ClusterEnvironment]$ClusterEnvironment, [int]$Index) {
+        $this.ClusterEnvironment = $ClusterEnvironment
         $this.Index = $Index
     }
 
     Cluster([string]$Id) {
         ($serviceName, $flightingRing, $region, $this.Index) = $Id -split "-"
-        $this.VmssEnvironment = [VmssEnvironment]::new($serviceName, $flightingRing, $region)
+        $this.ClusterEnvironment = [ClusterEnvironment]::new($serviceName, $flightingRing, $region)
     }
 
     [string] ToString() {
-        return "$($this.VmssEnvironment)-$($this.Index)"
+        return "$($this.ClusterEnvironment)-$($this.Index)"
     }
 
 }
@@ -175,31 +175,31 @@ function New-Cluster {
         [Parameter(Mandatory, ParameterSetName = "Components", Position = 2)]
         [string]$Region,
 
-        [Parameter(Mandatory, ParameterSetName = "VmssEnvironment", Position = 0)]
-        [VmssEnvironment]$Environment,
+        [Parameter(Mandatory, ParameterSetName = "ClusterEnvironment", Position = 0)]
+        [ClusterEnvironment]$Environment,
 
         [Parameter(ParameterSetName = "Components", Position = 3)]
-        [Parameter(ParameterSetName = "VmssEnvironment", Position = 1)]
+        [Parameter(ParameterSetName = "ClusterEnvironment", Position = 1)]
         [ValidateScript( {Test-Path $_ -PathType Container} )]
         [string]$DefinitionsContainer = "$PSScriptRoot\..\..\Definitions"
     )
 
     Write-Verbose "Parameter validation successful"
 
-    if (-not $VmssEnvironment) {
-        Write-Verbose "Generating VmssEnvironment object from components"
-        $VmssEnvironment = [VmssEnvironment]::new($ServiceName, $FlightingRing, $Region)
-        Write-Verbose "Created VmssEnvironment object '$VmssEnvironment'"
+    if (-not $ClusterEnvironment) {
+        Write-Verbose "Generating ClusterEnvironment object from components"
+        $ClusterEnvironment = [ClusterEnvironment]::new($ServiceName, $FlightingRing, $Region)
+        Write-Verbose "Created ClusterEnvironment object '$ClusterEnvironment'"
     }
 
-    # get next available VmssEnvironment index
+    # get next available ClusterEnvironment index
     Write-Verbose "Finding first unused cluster index"
-    [int[]]$indexes = Select-Cluster -VmssEnvironment $VmssEnvironment | % {$_.Index}
+    [int[]]$indexes = Select-Cluster -ClusterEnvironment $ClusterEnvironment | % {$_.Index}
     for ($index = 0; $indexes -contains $index; $index++) {}
     Write-Verbose "Using cluster index '$index'"
 
     # generate identifiers
-    $cluster = [Cluster]::new($VmssEnvironment, $index)
+    $cluster = [Cluster]::new($ClusterEnvironment, $index)
     $storageAccountName = "s$(New-Guid)".Replace("-", "").Substring(0, 24)
 
     # create resources
@@ -279,8 +279,8 @@ function New-ClusterDeployment {
 
     # grab the most specific definition of each type
     $selectConfigParams = @{
-        ServiceName          = $Cluster.VmssEnvironment.ServiceName
-        FlightingRing        = $Cluster.VmssEnvironment.FlightingRing
+        ServiceName          = $Cluster.ClusterEnvironment.ServiceName
+        FlightingRing        = $Cluster.ClusterEnvironment.FlightingRing
         DefinitionsContainer = $DefinitionsContainer
     }
     $dscFile               = Select-Config @selectConfigParams -ConfigType "ps1"
@@ -316,7 +316,7 @@ function New-ClusterDeployment {
         DscFileName           = Split-Path -Path $dscFile -Leaf
         DscHash               = (Get-FileHash "$env:TEMP\dsc.zip").Hash.Substring(0, 50)
         DscUrl                = $dscUrl
-        Environment           = $cluster.VmssEnvironment
+        Environment           = $cluster.ClusterEnvironment
         VhdContainer          = $vhdContainer
         SasToken              = $sasToken
 
@@ -367,8 +367,8 @@ An example
 function Select-Cluster {
     [CmdletBinding(DefaultParameterSetName = "Query")]
     Param(
-        [Parameter(ParameterSetName = "VmssEnvironment")]
-        [VmssEnvironment]$VmssEnvironment,
+        [Parameter(ParameterSetName = "ClusterEnvironment")]
+        [ClusterEnvironment]$ClusterEnvironment,
 
         [Parameter(ParameterSetName = "Query")]
         [string]$ServiceName = "*",
@@ -380,8 +380,8 @@ function Select-Cluster {
         [string]$Index = "*"
     )
 
-    $query = switch ([bool]$VmssEnvironment) {
-        $true {"$VmssEnvironment-*"}
+    $query = switch ([bool]$ClusterEnvironment) {
+        $true {"$ClusterEnvironment-*"}
         $false {"$ServiceName-$FlightingRing-$Region-$Index"}
     }
 
@@ -431,7 +431,7 @@ function Select-ClusterConfig {
     )
 
     $config = $ServiceName, "Default" `
-        | % {"$_.$FlightingRing", $_} `
+        | % {"$_.$FlightingRing.$Region", "$_.$FlightingRing", $_} `
         | % {"$DefinitionsContainer\$_.$ConfigType"} `
         | ? {Test-Path $_} `
         | Select -First 1
