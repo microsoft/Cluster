@@ -5,7 +5,7 @@
 PowerShell module for managing multi-region Azure Virtual Machine Scale Set clusters.
 
 
-# Usage
+## Usage
 
     # always get latest until we are out of beta
     Install-Module Cluster -Force
@@ -22,7 +22,8 @@ PowerShell module for managing multi-region Azure Virtual Machine Scale Set clus
     #  - See README for info on config naming
     $DefinitionsContainer = ".\Definitions"
 
-    # deploy two clusters under the same environment
+    # deploy two clusters under the same environment using
+    # two different call signatures
     $myClusters = @()
     $myClusters += New-Cluster `
         -Environment $myClusterEnvironmentDef `
@@ -40,22 +41,16 @@ PowerShell module for managing multi-region Azure Virtual Machine Scale Set clus
 
 
 
-# Terminology
+## Terminology
 
-## Cluster
-A single resource group.  The atomic unit of a service.
+| Term           | Description                                                                   | Isomorphic Identifier    |
+|----------------|-------------------------------------------------------------------------------|--------------------------|
+| Cluster        | A single resource group.  The atomic unit of a service.                       | `MyService-DEV-EastUS-1` |
+| Environment    | A set of clusters in a common region sharing a common configuration.          | `MyService-DEV-EastUS`   |
+| Flighting Ring | A set of environments sharing a common configuration.                         | `MyService-DEV`          |
+| Service        | A set of flighting rings containing various versions of a common application. | `MyService`              |
 
-## Environment
-A set of clusters in a common region sharing a configuration.
-
-## Flighting Ring
-A set of environments sharing a common configuration.
-
-## Service 
-A set of flighting rings containing various versions of a common application.
-
-
-# Contributing
+## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
