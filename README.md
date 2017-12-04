@@ -1,5 +1,43 @@
+# This repro is still in active development and is not currently supported by Microsoft
+
+
 # Cluster
 PowerShell module for managing multi-region Azure Virtual Machine Scale Set clusters.
+
+
+# Usage
+
+    # always get latest until we are out of beta
+    Install-Module Cluster -Force
+    Import-Module Cluster -Force
+
+    # define a cluster
+    $myClusterEnvironmentDef = @{
+        ServiceName   = "MyService"
+        FlightingRing = "DEV"
+        Region        = "East US"
+    }
+
+    # specify where your correctly named configs are stored
+    #  - See README for info on config naming
+    $DefinitionsContainer = ".\Definitions"
+
+    # deploy two clusters under the same environment
+    $myClusters = @()
+    $myClusters += New-Cluster `
+        -Environment $myClusterEnvironmentDef `
+        -DefinitionsContainer $DefinitionsContainer
+    $myClusters += New-Cluster `
+        @myClusterEnvironmentDef `
+        -DefinitionsContainer $DefinitionsContainer
+
+    # push an interative deployment to the two clusters
+    $myClusters | % {
+        New-ClusterDeployment `
+            -Cluster $_ `
+            -DefinitionsContainer $DefinitionsContainer
+    }
+
 
 
 # Terminology
@@ -15,9 +53,6 @@ A set of environments sharing a common configuration.
 
 ## Service 
 A set of flighting rings containing various versions of a common application.
-
-
-
 
 
 # Contributing
