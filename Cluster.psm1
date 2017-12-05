@@ -283,11 +283,11 @@ function New-ClusterDeployment {
         FlightingRing        = $Cluster.ClusterEnvironment.FlightingRing
         DefinitionsContainer = $DefinitionsContainer
     }
-    $dscFile               = Select-Config @selectConfigParams -ConfigType "ps1"
-    $templateFile          = Select-Config @selectConfigParams -ConfigType "template.json"
-    $templateParameterFile = Select-Config @selectConfigParams -ConfigType "parameters.json"
-    $configDataFile        = Select-Config @selectConfigParams -ConfigType "config.json"
-    $dscConfigDataFile     = Select-Config @selectConfigParams -ConfigType "psd1"
+    $dscFile               = Select-ClusterConfig @selectConfigParams -ConfigType "ps1"
+    $templateFile          = Select-ClusterConfig @selectConfigParams -ConfigType "template.json"
+    $templateParameterFile = Select-ClusterConfig @selectConfigParams -ConfigType "parameters.json"
+    $configDataFile        = Select-ClusterConfig @selectConfigParams -ConfigType "config.json"
+    $dscConfigDataFile     = Select-ClusterConfig @selectConfigParams -ConfigType "psd1"
 
     # package and upload DSC
     Write-Log "Uploading 'Configuration' to '$dscUrl'"
