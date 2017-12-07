@@ -43,12 +43,12 @@ PowerShell module for managing multi-region Azure Virtual Machine Scale Set clus
 
 ## Terminology
 
-| Term           | Description                                                                   | Isomorphic Identifier    |
-|----------------|-------------------------------------------------------------------------------|--------------------------|
-| Cluster        | A single resource group.  The atomic unit of a service.                       | `MyService-DEV-EastUS-1` |
-| Environment    | A set of clusters in a common region sharing a common configuration.          | `MyService-DEV-EastUS`   |
-| Flighting Ring | A set of environments sharing a common configuration.                         | `MyService-DEV`          |
-| Service        | A set of flighting rings containing various versions of a common application. | `MyService`              |
+| Term           | Description                                                                   | Isomorphic Identifier example |
+|----------------|-------------------------------------------------------------------------------|-------------------------------|
+| Cluster        | A single resource group.  The atomic unit of a service.                       | `MyService-DEV-EastUS-1`      |
+| Environment    | A set of clusters in a common region sharing a common configuration.          | `MyService-DEV-EastUS`        |
+| Flighting Ring | A set of environments sharing a common configuration.                         | `MyService-DEV`               |
+| Service        | A set of flighting rings containing various versions of a common application. | `MyService`                   |
 
 ## Contributing
 

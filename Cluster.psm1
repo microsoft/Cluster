@@ -285,17 +285,21 @@ function New-ClusterDeployment {
     }
     $dscFile               = Select-ClusterConfig @selectConfigParams -ConfigType "ps1"
     $templateFile          = Select-ClusterConfig @selectConfigParams -ConfigType "template.json"
-    $templateParameterFile = Select-ClusterConfig @selectConfigParams -ConfigType "parameters.json"
-    $configDataFile        = Select-ClusterConfig @selectConfigParams -ConfigType "config.json"
-    $dscConfigDataFile     = Select-ClusterConfig @selectConfigParams -ConfigType "psd1"
+    $templateParameterFile = Select-ClusterConfig @selectConfigParams -ConfigType "parameters.json" -ErrorAction "SilentlyContinue"
+    $configDataFile        = Select-ClusterConfig @selectConfigParams -ConfigType "config.json" -ErrorAction "SilentlyContinue"
+    $dscConfigDataFile     = Select-ClusterConfig @selectConfigParams -ConfigType "psd1" -ErrorAction "SilentlyContinue"
 
     # package and upload DSC
     Write-Log "Uploading 'Configuration' to '$dscUrl'"
-    Publish-AzureRmVMDscConfiguration `
-        -ConfigurationPath $dscFile `
-        -ConfigurationDataPath $dscConfigDataFile `
-        -OutputArchivePath "$env:TEMP\dsc.zip" `
-        -Force
+    $publishDscParams = @{
+        ConfigurationPath = $dscFile
+        OutputArchivePath = "$env:TEMP\dsc.zip"
+        Force = $true
+    }
+    if ($dscConfigDataFile) {
+        $publishDscParams["ConfigurationDataPath"] = $dscConfigDataFile
+    }
+    Publish-AzureRmVMDscConfiguration @publishDscParams
     Set-AzureStorageBlobContent `
         -File "$env:TEMP\dsc.zip" `
         -Container "configuration" `
@@ -306,26 +310,21 @@ function New-ClusterDeployment {
     
     # template deployment parameters
     $deploymentParams = @{
-        # cmdlet parameters
-        ResourceGroupName     = $Cluster
-        TemplateFile          = $templateFile
-        TemplateParameterFile = $templateParameterFile
-
-        # template parameters
-        ConfigData            = Get-Content $configDataFile -Raw | ConvertFrom-Json | ConvertTo-HashTable
-        DscFileName           = Split-Path -Path $dscFile -Leaf
-        DscHash               = (Get-FileHash "$env:TEMP\dsc.zip").Hash.Substring(0, 50)
-        DscUrl                = $dscUrl
-        Environment           = $cluster.ClusterEnvironment
-        VhdContainer          = $vhdContainer
-        SasToken              = $sasToken
-
+        ResourceGroupName = $Cluster
+        TemplateFile      = $templateFile
+        DscFileName       = Split-Path -Path $dscFile -Leaf
+        DscHash           = (Get-FileHash "$env:TEMP\dsc.zip").Hash.Substring(0, 50)
+        DscUrl            = $dscUrl
+        Environment       = $cluster.ClusterEnvironment
+        VhdContainer      = $vhdContainer
+        SasToken          = $sasToken
     }
-
-    Test-AzureRmResourceGroupDeployment `
-        @deploymentParams `
-        -Verbose `
-        | Select *
+    if ($templateParameterFile) {
+        $deploymentParams["TemplateParameterFile"] = $templateParameterFile
+    }
+    if ($configDataFile) {
+        $deploymentParams["ConfigData"] = Get-Content $configDataFile -Raw | ConvertFrom-Json | ConvertTo-HashTable
+    }
 
     # deploy template
     Write-Log "Starting deployment to '$Cluster'"
