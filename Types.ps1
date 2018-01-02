@@ -24,7 +24,8 @@ $DefaultResourcePrefix = "cluster"
 # name of the blob storage container containing service artifacts
 $ArtifactContainerName = "artifacts"
 
-
+# name of the blob storage container containing VM images
+$ImageContainerName = "images"
 
 
 # abstract
@@ -49,6 +50,9 @@ class ClusterResourceGroup {
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
             -Name $script:ArtifactContainerName
+        New-AzureStorageContainer `
+            -Context $this.GetStorageContext() `
+            -Name $script:ImageContainerName
     }
 
     [bool] Exists() {
@@ -171,13 +175,39 @@ class ClusterResourceGroup {
 }
 
 
-
-class ClusterFlightingRing : ClusterResourceGroup {
+class ClusterService : ClusterResourceGroup {
     [ValidatePattern("^[A-Z][A-z0-9]+$")]
     [string]$Service
 
+    ClusterService([string] $resourceGroupName) {
+        $parts = $resourceGroupName -split '-'
+        if ($parts.Count -ne 1) {
+            throw "Malformed Service name '$resourceGroupName'"
+        }
+        $this.Service = $resourceGroupName
+    }
+
+    [string] ToString() {
+        return $this.Service
+    }
+}
+
+
+class ClusterFlightingRing : ClusterResourceGroup {
+    [ValidateNotNullOrEmpty()]
+    [ClusterService]$Service
+
     [ValidatePattern("^[A-Z]{3,6}$")]
     [string]$FlightingRing
+
+    ClusterFlightingRing([string] $resourceGroupName) {
+        $parts = $resourceGroupName -split '-'
+        if ($parts.Count -ne 2) {
+            throw "Malformed Flighting Ring name '$resourceGroupName'"
+        }
+        $this.Service = [ClusterService]::new($parts[0])
+        $this.FlightingRing = $parts[1]
+    }
 
     [ClusterEnvironment[]] GetClusterEnvironments() {
         return $this.GetChildResourceGroups() | % {
@@ -203,6 +233,15 @@ class ClusterEnvironment : ClusterResourceGroup {
 
     [ValidatePattern("^[A-z][A-z0-9 ]+$")]
     [string]$Region
+
+    ClusterEnvironment([string] $resourceGroupName) {
+        $parts = $resourceGroupName -split '-'
+        if ($parts.Count -ne 3) {
+            throw "Malformed Flighting Ring name '$resourceGroupName'"
+        }
+        $this.FlightingRing = [ClusterFlightingRing]::new($parts[0..1] -join '-')
+        $this.Region = $parts[2]
+    }
 
     [Cluster[]] GetClusters() {
         return $this.GetChildResourceGroups() | % {
@@ -239,6 +278,15 @@ class Cluster : ClusterResourceGroup {
 
     [ValidateRange(0, 255)]
     [int]$Index
+
+    Cluster([string] $resourceGroupName) {
+        $parts = $resourceGroupName -split '-'
+        if ($parts.Count -ne 4) {
+            throw "Malformed Cluster name '$resourceGroupName'"
+        }
+        $this.Environment = [ClusterService]::new($parts[0..2] -join '-')
+        $this.FlightingRing = $parts[3]
+    }
 
     [void] Create() {
         ($this -as [ClusterResourceGroup]).Create()
