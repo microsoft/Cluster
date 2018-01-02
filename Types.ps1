@@ -2,13 +2,15 @@
  # Types.ps1
  ##
  # Assumptions:
- #  - AzureRM context is initialized
+ #   - AzureRM context is initialized
  # Design Considerations:
- #  - Defining a class "Environment" will cause issues with System.Environment
+ #   - Resources with globally unique names are given random IDs and should be accessed by resource group, not name
+ #   - Defining a class "Environment" will cause issues with System.Environment
  #>
 
 using namespace Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels
 using namespace Microsoft.WindowsAzure.Commands.Common.Storage
+using namespace System.Collections
 
 # required for importing types
 Import-Module AzureRm
@@ -19,34 +21,34 @@ $DefaultRegion = "West US 2"
 # string preceding a random string on underlying resource names
 $DefaultResourcePrefix = "cluster"
 
-# storage account creation common params
-$CommonStorageAccountParameters = @{
-    Type                    = "Standard_LRS"
-    EnableEncryptionService = "blob"
-}
-
 # name of the blob storage container containing service artifacts
-$ArtifactContainerName = "Artifacts"
+$ArtifactContainerName = "artifacts"
 
 
 
 
-<# abstract #> class ClusterResourceGroup {
+# abstract
+class ClusterResourceGroup {
 
     [void] Create() {
         if ($this.Exists()) {
-            throw "Resource Group already exists"
+            throw "Resource Group '$this' already exists"
         }
         New-AzureRmResourceGroup -Name $this -Location $script:DefaultRegion
         New-AzureRmStorageAccount `
             -ResourceGroupName $this `
             -Name ([ClusterResourceGroup]::NewResourceName()) `
             -Location $script:DefaultRegion `
-            @script:CommonStorageAccountParameters
+            -Type "Standard_LRS" `
+            -EnableEncryptionService "blob" `
+            -EnableHttpsTrafficOnly $true
         New-AzureRmKeyVault `
-            -VaultName $this `
+            -VaultName ([ClusterResourceGroup]::NewResourceName()) `
             -ResourceGroupName $this `
             -Location $script:DefaultRegion
+        New-AzureStorageContainer `
+            -Context $this.GetStorageContext() `
+            -Name $script:ArtifactContainerName
     }
 
     [bool] Exists() {
@@ -61,6 +63,7 @@ $ArtifactContainerName = "Artifacts"
             | ? {$_.ResourceGroupName -match "^$this-[^-]+$"}
     }
 
+    [LazyAzureStorageContext]$_StorageContext
     [LazyAzureStorageContext] GetStorageContext() {
         if (-not $this._StorageContext) {
             $storageAccount = Get-AzureRmStorageAccount `
@@ -76,34 +79,43 @@ $ArtifactContainerName = "Artifacts"
     }
 
     [void] PropagateArtifacts() {
-        $contexts = $this.GetChildResourceGroups().GetStorageContext()
-        $flightingRingArtifacts = Get-AzureStorageBlob `
+        $childContexts = $this.GetChildResourceGroups() `
+            | % {$_.ResourceGroupName} `
+            | % {Get-AzureRmStorageAccount -ResourceGroupName $_} `
+            | % {$_.Context}
+        $artifactNames = Get-AzureStorageBlob `
             -Container $script:ArtifactContainerName `
-            -Context $this.GetStorageContext()
-        $pendingBlobs = $contexts | % {
-            $context = $_
-            $missingArtifacts = $flightingRingArtifacts | ? {
-                $blob = Get-AzureStorageBlob `
-                    -Context $context `
+            -Context $this.GetStorageContext() `
+            | % {$_.Name}
+        
+        # async start copying blobs
+        $pendingBlobs = [ArrayList]::new()
+        foreach ($childContext in $childContexts) {
+            foreach ($artifactName in $artifactNames) {
+                $childBlob = Get-AzureStorageBlob `
+                    -Context $childContext `
                     -Container $script:ArtifactContainerName `
-                    -Blob $_
-                -not $blob
-            }
-            $missingArtifacts | % {
-                Start-AzureStorageBlobCopy `
-                    -Context $this.GetStorageContext() `
-                    -DestContext $context `
-                    -SrcContainer $script:ArtifactContainerName `
-                    -DestContainer $script:ArtifactContainerName `
-                    -SrcBlob $_ `
-                    -DestBlob $_
+                    -Blob $artifactName `
+                    -ErrorAction SilentlyContinue
+                if (-not $childBlob) {
+                    $childBlob = Start-AzureStorageBlobCopy `
+                        -Context $this.GetStorageContext() `
+                        -DestContext $childContext `
+                        -SrcContainer $script:ArtifactContainerName `
+                        -DestContainer $script:ArtifactContainerName `
+                        -SrcBlob $artifactName `
+                        -DestBlob $artifactName
+                    $pendingBlobs.Add($childBlob)
+                }
             }
         }
-        $pendingBlobs | % {
+
+        # block until all copies are complete
+        foreach ($blob in $pendingBlobs) {
             Get-AzureStorageBlobCopyState `
-                -Context $this.GetStorageContext() `
+                -Context $blob.Context `
                 -Container $script:ArtifactContainerName `
-                -Blob $_.Name `
+                -Blob $blob.Name `
                 -WaitForComplete
         }
     }
@@ -115,25 +127,41 @@ $ArtifactContainerName = "Artifacts"
     }
 
     [void] PropagateSecrets() {
-        throw "NYI"
-        # TODO: get secrets from this resource group's key vault and copy them
-        # to the child key vaults, preserving expiration dates
+        $keyVaultName = (Get-AzureRmKeyVault -ResourceGroupName $this).VaultName
+        $childKeyVaultNames = $this.GetChildResourceGroups() `
+            | % {Get-AzureRmKeyVault -ResourceGroupName $_.ResourceGroupName} `
+            | % {$_.VaultName}
+        $secretNames = (Get-AzureKeyVaultSecret -VaultName $keyVaultName).Name
+        foreach ($childKeyVaultName in $childKeyVaultNames) {
+            foreach ($secretName in $secretNames) {
+                $secretValue = Get-AzureKeyVaultSecret `
+                    -VaultName $keyVaultName `
+                    -Name $secretName `
+                    | % {$_.SecretValue}
+                Set-AzureKeyVaultSecret `
+                    -VaultName $childKeyVaultName `
+                    -Name $secretName `
+                    -SecretValue $secretValue
+            }
+        }
     }
 
-    <# abstract #> [string] ToString() {
+    # abstract
+    [string] ToString() {
         throw "This method must be overriden in deriving class"
     }
 
     [void] UploadArtifact([string] $ArtifactPath) {
         Set-AzureStorageBlobContent `
             -File $ArtifactPath `
-            -Container "Artifacts" `
+            -Container $script:ArtifactContainerName `
             -Blob (Split-Path -Path $ArtifactPath -Leaf) `
             -Context $this.GetStorageContext() `
             -Force
     }
 
-    static [string] NewResourceName([int]$Length = 24) {
+    static [string] NewResourceName() {
+        $Length = 24
         $allowedChars = "abcdefghijklmnopqrstuvwxyz0123456789"
         $chars = 1..($Length - $script:DefaultResourcePrefix.Length) `
             | % {Get-Random -Maximum $allowedChars.Length} `
