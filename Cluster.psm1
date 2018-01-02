@@ -4,6 +4,62 @@ $ErrorActionPreference = "Stop"
 $InformationPreference = "Continue"
 
 
+
+<#
+.SYNOPSIS
+Creates a new Service in Azure
+
+.DESCRIPTION
+Creates a new Service resource group for Cluster flighting
+
+.PARAMETER Service
+Name used to identify the service
+
+.EXAMPLE
+New-ClusterService -Service "MyService"
+
+.NOTES
+Requires a correctly set AzureRM context
+#>
+function New-ClusterService {
+    Param(
+        [Parameter(Mandatory)]
+        [string]$Service
+    )
+
+    # create and validate new service model and resources
+    $clusterService = [ClusterService]@{
+        Service = $Service
+    }
+    if ($clusterService.Exists()) {
+        throw "Service '$Service' already exists"
+    }
+    $clusterService.Create()
+
+    return $clusterService
+}
+
+
+
+<#
+.SYNOPSIS
+Creates a new Flighting Ring in Azure
+
+.DESCRIPTION
+Creates a new Flighting Ring resource group for Cluster flighting
+
+.PARAMETER Service
+Name used to identify the service
+
+.PARAMETER FlightingRing
+Name used to identify the flighting ring
+
+.EXAMPLE
+New-ClusterFlightingRing -Service "MyService" -FlightingRing "DEV"
+
+.NOTES
+Requires a correctly set AzureRM context
+#>
 function New-ClusterFlightingRing {
     Param(
         [Parameter(Mandatory)]
@@ -21,9 +77,34 @@ function New-ClusterFlightingRing {
         throw "Flighting Ring '$clusterFlightingRing' already exists"
     }
     $clusterFlightingRing.Create()
+
+    return $clusterFlightingRing
 }
 
 
+
+<#
+.SYNOPSIS
+Creates a new Environment in Azure
+
+.DESCRIPTION
+Creates a new Environment resource group for Cluster flighting
+
+.PARAMETER Service
+Name used to identify the service
+
+.PARAMETER FlightingRing
+Name used to identify the flighting ring
+
+.PARAMETER Region
+Name used to identify the region
+
+.EXAMPLE
+New-ClusterEnvironnment -Service "MyService" -FlightingRing "DEV" -Region "EastUS"
+
+.NOTES
+Requires a correctly set AzureRM context
+#>
 function New-ClusterEnvironment {
     Param(
         [Parameter(Mandatory)]
@@ -52,9 +133,33 @@ function New-ClusterEnvironment {
         throw "Environment '$clusterEnvironment' already exists"
     }
     $clusterEnvironment.Create()
+
+    return $clusterEnvironment
 }
 
 
+<#
+.SYNOPSIS
+Creates a new Cluster in Azure
+
+.DESCRIPTION
+Long description
+
+.PARAMETER Service
+Name used to identify the service
+
+.PARAMETER FlightingRing
+Name used to identify the flighting ring
+
+.PARAMETER Region
+Name used to identify the region
+
+.EXAMPLE
+New-Cluster -Service "MyService" -FlightingRing "DEV" -Region "EastUS"
+
+.NOTES
+Requires a correctly set AzureRM context
+#>
 function New-Cluster {
     Param(
         [Parameter(Mandatory)]
@@ -89,19 +194,25 @@ function New-Cluster {
         Index       = $clusterEnvironment.NextIndex()
     }
     $cluster.Create()
+
+    return $cluster
 }
 
 
 
 function Publish-ClusterArtifact {
     Param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ParameterSetName='Object')]
+        [Cluster]
+        [Parameter(Mandatory, ParameterSetName='Components')]
+        [Parameter(Mandatory, )]
         [string]$Service,
         [Parameter(Mandatory)]
         [string]$FlightingRing,
         [Parameter(Mandatory)]
         [ValidateScript( {Test-Path $_ -PathType Leaf} )]
-        [string]$ArtifactPath
+        [string]$ArtifactPath,
+        [switch]$Sync
     )
 
     # create and validate flighting ring model
@@ -113,19 +224,46 @@ function Publish-ClusterArtifact {
         throw "Flighting Ring '$clusterFlightingRing' does not exist"
     }
 
-    # upload blob to flighting ring and environments
+    # upload blob to flighting ring
     $clusterFlightingRing.UploadArtifact($ArtifactPath)
-    $clusterFlightingRing.PropagateArtifacts()
+
+    # push to descendents
+    if ($Sync) {
+        $clusterFlightingRing.PropagateArtifacts()
+    }
 }
 
 
-function Publish-ClusterEnvironmentConfiguration {
+function Publish-ClusterSecret {
+    Param(
+        [Parameter(Mandatory)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [Parameter(Mandatory)]
+        [string]$Value,
+        [string]$ContentType = "text/plain",
+        [switch]$Sync
+    )
+    
+    $vaultName = (Get-AzureRmKeyVault -ResourceGroupName $ResourceGroupName).VaultName
+    Set-AzureKeyVaultSecret `
+        -VaultName $vaultName `
+        -ContentType $ContentType `
+        -Name $Name `
+        -SecretValue $Value
+}
+
+
+function Publish-ClusterImage {
 
 }
 
 
 function Publish-ClusterConfiguration {
+    Param(
 
+    )
 }
 
 
@@ -164,7 +302,6 @@ function Select-Cluster {
     $query = "$Service-$FlightingRing-$Region-$Index"
     return Get-AzureRmResourceGroup `
         | ? {$_.ResourceGroupName -like $query} `
-        | % {[Cluster]::New($_.ResourceGroupName)}
-
+        | % {[Cluster]::new($_.ResourceGroupName)}
 }
 
