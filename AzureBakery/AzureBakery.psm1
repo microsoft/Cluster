@@ -133,6 +133,10 @@ function New-BakedImage {
         -Image (New-AzureRmImageConfig -Location $Location -SourceVirtualMachineId $Vm.Id) `
         -ImageName (Get-Date -Format "yyyyMMdd") `
         -ResourceGroupName $ImageResourceGroupName
+    Save-AzureRmVMImage `
+        -Name "" `
+        -DestinationContainerName "" `
+        -VHDNamePrefix ""
 
     # clean up
     Write-Verbose "Delete '$Name'"
