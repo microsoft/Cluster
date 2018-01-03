@@ -1,0 +1,346 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "localAdminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Admin password on all VMs."
+            }
+        },
+        "localAdminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Admin username on all VMs."
+            }
+        },
+        "configData": {
+            "type": "object",
+            "metadata": {
+                "description": "Unstructured data available to the DSC"
+            }
+        },
+        "dscFileName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the file containing the DSC."
+            }
+        },
+        "dscHash": {
+            "type": "string",
+            "metadata": {
+                "description": "Hash of the DSC used to identify its version."
+            }
+        },
+        "dscUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Url to the blob containing the dsc zip."
+            }
+        },
+        "environment": {
+            "type": "string",
+            "metadata": {
+                "description": "See README for OneRF terminology"
+            }
+        },
+        "sasToken": {
+            "type": "string",
+            "metadata": {
+                "description": "The sasToken required to access the DSC.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated."
+            }
+        },
+        "servicePrincipalApplicationId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure credential username for Login-AzureRmAccount"
+            }
+        },
+        "servicePrincipalKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Azure credential password for Login-AzureRmAccount"
+            }
+        },
+        "servicePrincipalTenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure credential password for Login-AzureRmAccount"
+            }
+        },
+        "vhdContainer": {
+            "type": "string",
+            "metadata": {
+                "description": "The URL to the container where VHDs are stored."
+            }
+        },
+        "instanceCount": {
+            "type": "int",
+            "metadata": {
+                "description": "Number of VM instances (100 or less)."
+            },
+            "maxValue": 100
+        },
+        "pingTestIntervalSecs": {
+            "type": "int",
+            "metadata": {
+                "description": "Interval in seconds between load balancer health checks."
+            },
+            "defaultValue": 5
+        },
+        "vmSku": {
+            "type": "string",
+            "allowedValues": [
+                "Standard_D2_v2",
+                "Standard_D4_v2",
+                "Standard_F16",
+                "Standard_F4",
+                "Standard_F8",
+                "Standard_F16s"
+            ],
+            "metadata": {
+                "description": "Size of VMs in the VM Scale Set."
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "vnet",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-06-01",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.0.0.0/16"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "subnet",
+                        "properties": {
+                            "addressPrefix": "10.0.0.0/24"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "pip",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2017-06-01",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "name": "lb",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-06-01",
+            "dependsOn": [
+                "Microsoft.Network/publicIPAddresses/pip"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "vip",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'pip')]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "pool"
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "http",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/frontendIPConfigurations/vip')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/backendAddressPools/pool')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": "[parameters('pingTestIntervalSecs')]",
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/probes/healthcheck')]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "https",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/frontendIPConfigurations/vip')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/backendAddressPools/pool')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 443,
+                            "backendPort": 443,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": "[parameters('pingTestIntervalSecs')]",
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/probes/healthcheck')]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "healthcheck",
+                        "properties": {
+                            "protocol": "Http",
+                            "port": 80,
+                            "intervalInSeconds": "[parameters('pingTestIntervalSecs')]",
+                            "numberOfProbes": 3,
+                            "requestPath": "/healthcheck.aspx"
+                        }
+                    }
+                ],
+                "inboundNatPools": [
+                    {
+                        "name": "rdpPool",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/frontendIPConfigurations/vip')]"
+                            },
+                            "protocol": "tcp",
+                            "frontendPortRangeStart": 50000,
+                            "frontendPortRangeEnd": 50100,
+                            "backendPort": 3389
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachineScaleSets",
+            "name": "vmss",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Application": "onerf",
+                "Environment": "[resourceGroup().name]"
+            },
+            "apiVersion": "2017-03-30",
+            "dependsOn": [
+                "Microsoft.Network/loadBalancers/lb"
+            ],
+            "sku": {
+                "name": "[parameters('vmSku')]",
+                "capacity": "[parameters('instanceCount')]"
+            },
+            "properties": {
+                "overprovision": true,
+                "upgradePolicy": {
+                    "mode": "Automatic"
+                },
+                "virtualMachineProfile": {
+                    "storageProfile": {
+                        "osDisk": {
+                            "vhdContainers": [
+                                "[parameters('vhdContainer')]"
+                            ],
+                            "name": "osdisk",
+                            "caching": "ReadOnly",
+                            "createOption": "FromImage"
+                        },
+                        "imageReference": {
+                            "publisher": "MicrosoftWindowsServer",
+                            "offer": "WindowsServer",
+                            "sku": "2016-Datacenter",
+                            "version": "latest"
+                        }
+                    },
+                    "osProfile": {
+                        "windowsConfiguration": {
+                            "enableAutomaticUpdates": true,
+                            "timeZone": "Pacific Standard Time"
+                        },
+                        "computerNamePrefix": "[substring(replace(resourceGroup().name, '-', ''), 0, 9)]",
+                        "adminUsername": "[parameters('localAdminUsername')]",
+                        "adminPassword": "[parameters('localAdminPassword')]"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaceConfigurations": [
+                        {
+                            "name": "nic",
+                            "properties": {
+                                "primary": true,
+                                "ipConfigurations": [
+                                    {
+                                        "name": "ipconfig",
+                                        "properties": {
+                                            "subnet": {
+                                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', 'vnet'), '/subnets/subnet')]"
+                                            },
+                                            "loadBalancerBackendAddressPools": [
+                                                {
+                                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/backendAddressPools/pool')]"
+                                                }
+                                            ],
+                                            "loadBalancerInboundNatPools": [
+                                                {
+                                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/inboundNatPools/rdpPool')]"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "extensionProfile": {
+                    "extensions": [
+                        {
+                            "name": "Microsoft.Powershell.DSC",
+                            "properties": {
+                                "publisher": "Microsoft.Powershell",
+                                "type": "DSC",
+                                "typeHandlerVersion": "2.9",
+                                "autoUpgradeMinorVersion": true,
+                                "forceUpdateTag": "[parameters('dscHash')]",
+                                "settings": {
+                                    "configuration": {
+                                        "url": "[parameters('dscUrl')]",
+                                        "script": "[parameters('dscFileName')]",
+                                        "function": "Main"
+                                    },
+                                    "configurationArguments": {
+                                        "Environment": "[parameters('environment')]",
+                                        "ConfigData": "[parameters('configData')]",
+                                        "ServicePrincipalTenantId": "[parameters('servicePrincipalTenantId')]"
+                                    }
+                                },
+                                "protectedSettings": {
+                                    "configurationUrlSasToken": "[parameters('sasToken')]",
+                                    "configurationArguments": {
+                                        "ServicePrincipal": {
+                                            "UserName": "[parameters('servicePrincipalApplicationId')]",
+                                            "Password": "[parameters('servicePrincipalKey')]"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}
