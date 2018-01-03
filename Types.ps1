@@ -28,8 +28,13 @@ $ArtifactContainerName = "artifacts"
 $ImageContainerName = "images"
 
 
+
+
+
+
 # abstract
 class ClusterResourceGroup {
+
 
     [void] Create() {
         if ($this.Exists()) {
@@ -55,6 +60,7 @@ class ClusterResourceGroup {
             -Name $script:ImageContainerName
     }
 
+
     [bool] Exists() {
         $resourceGroup = Get-AzureRmResourceGroup `
             -ResourceGroupName $this `
@@ -62,10 +68,12 @@ class ClusterResourceGroup {
         return $resourceGroup -as [bool]
     }
 
+
     [PSResourceGroup[]] GetChildResourceGroups() {
         return Get-AzureRmResourceGroup `
             | ? {$_.ResourceGroupName -match "^$this-[^-]+$"}
     }
+
 
     [LazyAzureStorageContext]$_StorageContext
     [LazyAzureStorageContext] GetStorageContext() {
@@ -77,10 +85,12 @@ class ClusterResourceGroup {
         return $this._StorageContext
     }
 
+
     [void] NewImage() {
         throw "NYI"
         # TODO: use the chriskuech/AzureBakery repo to create a new VHD
     }
+
 
     [void] PropagateArtifacts() {
         $childContexts = $this.GetChildResourceGroups() `
@@ -114,6 +124,7 @@ class ClusterResourceGroup {
             }
         }
 
+
         # block until all copies are complete
         foreach ($blob in $pendingBlobs) {
             Get-AzureStorageBlobCopyState `
@@ -124,11 +135,13 @@ class ClusterResourceGroup {
         }
     }
 
+
     [void] PropagateBlobs() {
         throw "NYI"
         # TODO: Generalize PropagateArtifacts to support all containers/blobs
         # and deprecate that method
     }
+
 
     [void] PropagateSecrets() {
         $keyVaultName = (Get-AzureRmKeyVault -ResourceGroupName $this).VaultName
@@ -150,10 +163,12 @@ class ClusterResourceGroup {
         }
     }
 
+
     # abstract
     [string] ToString() {
         throw "This method must be overriden in deriving class"
     }
+
 
     [void] UploadArtifact([string] $ArtifactPath) {
         Set-AzureStorageBlobContent `
@@ -172,12 +187,22 @@ class ClusterResourceGroup {
             | % {$allowedChars[$_]}
         return $script:DefaultResourcePrefix + ($chars -join '')
     }
+
 }
+
+
+
+
+
+
+
 
 
 class ClusterService : ClusterResourceGroup {
     [ValidatePattern("^[A-Z][A-z0-9]+$")]
     [string]$Service
+
+    ClusterService() {}
 
     ClusterService([string] $resourceGroupName) {
         $parts = $resourceGroupName -split '-'
@@ -193,12 +218,21 @@ class ClusterService : ClusterResourceGroup {
 }
 
 
+
+
+
+
+
+
+
 class ClusterFlightingRing : ClusterResourceGroup {
     [ValidateNotNullOrEmpty()]
     [ClusterService]$Service
 
     [ValidatePattern("^[A-Z]{3,6}$")]
     [string]$FlightingRing
+
+    ClusterFlightingRing() {}
 
     ClusterFlightingRing([string] $resourceGroupName) {
         $parts = $resourceGroupName -split '-'
@@ -227,12 +261,24 @@ class ClusterFlightingRing : ClusterResourceGroup {
 
 
 
+
+
+
+
+
+
+
+
+
+
 class ClusterEnvironment : ClusterResourceGroup {
     [ValidateNotNullOrEmpty()]
     [ClusterFlightingRing]$FlightingRing
 
     [ValidatePattern("^[A-z][A-z0-9 ]+$")]
     [string]$Region
+
+    ClusterEnvironment() {}
 
     ClusterEnvironment([string] $resourceGroupName) {
         $parts = $resourceGroupName -split '-'
@@ -272,12 +318,27 @@ class ClusterEnvironment : ClusterResourceGroup {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Cluster : ClusterResourceGroup {
     [ValidateNotNullOrEmpty()]
     [ClusterEnvironment]$Environment
 
     [ValidateRange(0, 255)]
     [int]$Index
+
+    Cluster() {}
 
     Cluster([string] $resourceGroupName) {
         $parts = $resourceGroupName -split '-'
