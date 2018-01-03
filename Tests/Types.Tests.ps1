@@ -71,6 +71,14 @@ Describe "Cluster types" {
                 | Should -Be "myValue"
         }
 
+        It "Can create multiple clusters" {
+
+        }
+
+        It "Can redeploy clusters" {
+            
+        }
+
     } finally {
 
         It "Can be cleaned up" {
