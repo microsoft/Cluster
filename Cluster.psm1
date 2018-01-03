@@ -5,6 +5,44 @@ $InformationPreference = "Continue"
 
 
 
+
+<#
+.SYNOPSIS
+Creates a ClusterService, ClusterFlightingRing, ClusterEnvironment, or Cluster from a resource group name
+
+.DESCRIPTION
+Infers the type of the Cluster node from a resource group name and returns the associated ClusterService, ClusterFlightingRing, ClusterEnvironment, or Cluster object
+
+.PARAMETER ResourceGroupName
+Name of the Azure Resource Group name representing a cluster resource group
+
+.EXAMPLE
+$MyClusterEnvironment = ConvertTo-ClusterType -ResourceGroupName "MyService-DEV-EastUS"
+#>
+function ConvertTo-ClusterType {
+    Param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ResourceGroupName
+    )
+
+    $height = ($resourceGroupName -split "-").Count
+    $type = switch ($height) {
+        1 {[ClusterService]}
+        2 {[ClusterFlightingRing]}
+        3 {[ClusterEnvironment]}
+        4 {[Cluster]}
+        default {throw "Invalid Cluster resource group name '$resourceGroupName'"}
+    }
+
+    return $type::new($resourceGroupName)
+}
+
+
+
+
+
+
 <#
 .SYNOPSIS
 Creates a new Service in Azure
@@ -275,7 +313,7 @@ Queries Azure for clusters
 .DESCRIPTION
 Filters Azure resource groups by the provided parameters and returns the associated Cluster objects.  Supports globs in parameter names.
 
-.PARAMETER ServiceName
+.PARAMETER Service
 Parameter See README for terminology
 
 .PARAMETER FlightingRing

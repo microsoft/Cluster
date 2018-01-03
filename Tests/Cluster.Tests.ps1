@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 Import-Module AzureRm
 
 # import the code for testing
-Import-Module .\Cluster -Force
+Import-Module "$PSScriptRoot\..\Cluster" -Force
 
 
 

@@ -6,7 +6,7 @@ Describe "AzureBakery" {
 
     It "Bakes images" {
         New-BakedImage `
-            -ImageResourceGroupName "" `
+            -ImageResourceGroupName "chkuechimagetest" `
             -WindowsFeature "Web-Server", "Web-Asp-Net"
         Get-AzureStorageBlob `
             -Blob "" `

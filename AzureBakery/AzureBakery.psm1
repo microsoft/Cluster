@@ -5,7 +5,7 @@ function New-BakedImage {
         [ValidateNotNullOrEmpty()]
         [string]$ImageResourceGroupName,
         [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string[]]$WindowsFeature,
         [ValidateNotNullOrEmpty()]
         [string]$Name = ("temp$(New-Guid)" -replace "[^\w\d]").Substring(0, 24),
@@ -133,10 +133,10 @@ function New-BakedImage {
         -Image (New-AzureRmImageConfig -Location $Location -SourceVirtualMachineId $Vm.Id) `
         -ImageName (Get-Date -Format "yyyyMMdd") `
         -ResourceGroupName $ImageResourceGroupName
-    Save-AzureRmVMImage `
-        -Name "" `
-        -DestinationContainerName "" `
-        -VHDNamePrefix ""
+    # Save-AzureRmVMImage `
+    #     -Name "" `
+    #     -DestinationContainerName "" `
+    #     -VHDNamePrefix ""
 
     # clean up
     Write-Verbose "Delete '$Name'"
