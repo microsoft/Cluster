@@ -243,7 +243,6 @@ function Publish-ClusterArtifact {
         [Parameter(Mandatory, ParameterSetName='Object')]
         [Cluster]
         [Parameter(Mandatory, ParameterSetName='Components')]
-        [Parameter(Mandatory, )]
         [string]$Service,
         [Parameter(Mandatory)]
         [string]$FlightingRing,
