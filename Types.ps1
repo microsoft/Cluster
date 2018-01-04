@@ -291,8 +291,8 @@ class Cluster : ClusterResourceGroup {
     [int]$Index
 
     Cluster([string] $resourceGroupName) : base($resourceGroupName) {
-        $this.Environment = [Cluster]::new($this.Identity[0..2] -join "-")
-        $this.Index = $this.Indentity | Select -Last 1
+        $this.Environment = [ClusterEnvironment]::new($this.Identity[0..2] -join "-")
+        $this.Index = $this.Identity | Select -Last 1
     }
 
     [void] Create() {
@@ -306,9 +306,7 @@ class Cluster : ClusterResourceGroup {
     }
 
     [string] GetConfig([string]$DefinitionsContainer, [string]$FileExtension) {
-        $service = $this.Environment.FlightingRing.Service
-        $flightingRing = $this.Environment.FlightingRing.FlightingRing
-        $region = $this.Environment.Region
+        ($service, $flightingRing, $region, $index) = $this.Identity
         $config = $service, "Default" `
             | % {"$_.$flightingRing.$region", "$_.$flightingRing", $_} `
             | % {"$DefinitionsContainer\$_.$FileExtension"} `
