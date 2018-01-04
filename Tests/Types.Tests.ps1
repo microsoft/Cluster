@@ -10,19 +10,10 @@ Import-Module AzureRm
 . "$PSScriptRoot\..\Types.ps1"
 
 
-$Service = [ClusterService]@{
-    Service = "TestSvc"
-}
+$Service = [ClusterService]::new("TestSvc")
+$FlightingRing = [ClusterFlightingRing]::new("TestSvc-DEV")
+$Environment = [ClusterEnvironment]::new("TestSvc-DEV-WestUS2")
 
-$FlightingRing = [ClusterFlightingRing]@{
-    Service       = $Service
-    FlightingRing = "DEV"
-}
-
-$Environment = [ClusterEnvironment]@{
-    FlightingRing = $FlightingRing
-    Region        = "EastUS"
-}
 
 
 

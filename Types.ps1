@@ -9,7 +9,7 @@
  #>
 
 using namespace Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels
-using namespace Microsoft.WindowsAzure.Commands.Common.Storage
+using namespace Microsoft.Azure.Commands.Common.Authentication.Abstractions
 using namespace System.Collections
 
 # required for importing types
@@ -35,6 +35,7 @@ $ImageContainerName = "images"
 # abstract
 class ClusterResourceGroup {
 
+    # Indentity vector
     [string[]]$Identity
 
 
@@ -76,9 +77,11 @@ class ClusterResourceGroup {
     }
 
 
-    [PSResourceGroup[]] GetChildResourceGroups() {
+    [ClusterResourceGroup[]] GetChildren() {
         return Get-AzureRmResourceGroup `
-            | ? {$_.ResourceGroupName -match "^$this-[^-]+$"}
+            | % {$_.ResourceGroupName} `
+            | ? {$_ -match "^$this-[^-]+$"} `
+            | % {[ClusterResourceGroup]::new($_)}
     }
 
 
@@ -100,10 +103,11 @@ class ClusterResourceGroup {
 
 
     [void] PropagateArtifacts() {
-        $childContexts = $this.GetChildResourceGroups() `
-            | % {$_.ResourceGroupName} `
-            | % {Get-AzureRmStorageAccount -ResourceGroupName $_} `
-            | % {$_.Context}
+        $children = $this.GetChildren()
+        if (-not $children) {
+            return
+        }
+        $childContexts = $children.GetStorageContext()
         $artifactNames = Get-AzureStorageBlob `
             -Container $script:ArtifactContainerName `
             -Context $this.GetStorageContext() `
@@ -131,7 +135,6 @@ class ClusterResourceGroup {
             }
         }
 
-
         # block until all copies are complete
         foreach ($blob in $pendingBlobs) {
             Get-AzureStorageBlobCopyState `
@@ -140,6 +143,8 @@ class ClusterResourceGroup {
                 -Blob $blob.Name `
                 -WaitForComplete
         }
+
+        $children.PropagateArtifacts()
     }
 
 
@@ -147,53 +152,17 @@ class ClusterResourceGroup {
         throw "NYI"
         # TODO: Generalize PropagateArtifacts to support all containers/blobs
         # and deprecate that method
-
-        $childContexts = $this.GetChildResourceGroups() `
-            | % {$_.ResourceGroupName} `
-            | % {Get-AzureRmStorageAccount -ResourceGroupName $_} `
-            | % {$_.Context}
-        $artifactNames = Get-AzureStorageBlob `
-            -Container $script:ArtifactContainerName `
-            -Context $this.GetStorageContext() `
-            | % {$_.Name}
-        
-        # async start copying blobs
-        $pendingBlobs = [ArrayList]::new()
-        foreach ($childContext in $childContexts) {
-            foreach ($artifactName in $artifactNames) {
-                $childBlob = Get-AzureStorageBlob `
-                    -Context $childContext `
-                    -Container $script:ArtifactContainerName `
-                    -Blob $artifactName `
-                    -ErrorAction SilentlyContinue
-                if (-not $childBlob) {
-                    $childBlob = Start-AzureStorageBlobCopy `
-                        -Context $this.GetStorageContext() `
-                        -DestContext $childContext `
-                        -SrcContainer $script:ArtifactContainerName `
-                        -DestContainer $script:ArtifactContainerName `
-                        -SrcBlob $artifactName `
-                        -DestBlob $artifactName
-                    $pendingBlobs.Add($childBlob)
-                }
-            }
-        }
-
-        # block until all copies are complete
-        foreach ($blob in $pendingBlobs) {
-            Get-AzureStorageBlobCopyState `
-                -Context $blob.Context `
-                -Container $script:ArtifactContainerName `
-                -Blob $blob.Name `
-                -WaitForComplete
-        }
     }
 
 
     [void] PropagateSecrets() {
+        $children = $this.GetChildren()
+        if (-not $children) { 
+            return
+        }
         $keyVaultName = (Get-AzureRmKeyVault -ResourceGroupName $this).VaultName
-        $childKeyVaultNames = $this.GetChildResourceGroups() `
-            | % {Get-AzureRmKeyVault -ResourceGroupName $_.ResourceGroupName} `
+        $childKeyVaultNames = $children `
+            | % {Get-AzureRmKeyVault -ResourceGroupName $_} `
             | % {$_.VaultName}
         $secretNames = (Get-AzureKeyVaultSecret -VaultName $keyVaultName).Name
         foreach ($childKeyVaultName in $childKeyVaultNames) {
@@ -208,12 +177,25 @@ class ClusterResourceGroup {
                     -SecretValue $secretValue
             }
         }
+        $children.PropagateSecrets()
     }
 
 
     # abstract
     [string] ToString() {
         return $this.Identity -join "-"
+    }
+
+
+    [Reflection.TypeInfo] InferType() {
+        switch ($this.Identity.Count) {
+            1 {return [ClusterService]}
+            2 {return [ClusterFlightingRing]}
+            3 {return [ClusterEnvironment]}
+            4 {return [Cluster]}
+        }
+        throw "Cannot infer type of '$this'"
+        return [void]
     }
 
 
@@ -225,6 +207,7 @@ class ClusterResourceGroup {
             -Context $this.GetStorageContext() `
             -Force
     }
+
 
     static [string] NewResourceName() {
         $Length = 24
@@ -249,15 +232,11 @@ class ClusterService : ClusterResourceGroup {
     [ValidatePattern("^[A-Z][A-z0-9]+$")]
     [string]$Service
 
-    ClusterService([string] $resourceGroupName) : base($resourceGroupName) {}
+    ClusterService([string] $resourceGroupName) : base($resourceGroupName) {
+        $this.Service = $this.Identity
+    }
 
 }
-
-
-
-
-
-
 
 
 
@@ -268,37 +247,12 @@ class ClusterFlightingRing : ClusterResourceGroup {
     [ValidatePattern("^[A-Z]{3,6}$")]
     [string]$FlightingRing
 
-    ClusterFlightingRing() {}
-
-    ClusterFlightingRing([string] $resourceGroupName) {
-        $parts = $resourceGroupName -split '-'
-        if ($parts.Count -ne 2) {
-            throw "Malformed Flighting Ring name '$resourceGroupName'"
-        }
-        $this.Service = [ClusterService]::new($parts[0])
-        $this.FlightingRing = $parts[1]
-    }
-
-    [ClusterEnvironment[]] GetClusterEnvironments() {
-        return $this.GetChildResourceGroups() | % {
-            ($a, $b, $region) = $_.ResourceGroupName -split "-"
-            [ClusterEnvironment]@{
-                FlightingRing = $this
-                Region        = $region
-            }
-        }
+    ClusterFlightingRing([string] $resourceGroupName) : base($resourceGroupName) {
+        $this.Service = [ClusterService]::new($this.Identity[0])
+        $this.FlightingRing = $this.Identity | Select -Last 1
     }
 
 }
-
-
-
-
-
-
-
-
-
 
 
 
@@ -310,50 +264,20 @@ class ClusterEnvironment : ClusterResourceGroup {
     [ValidatePattern("^[A-z][A-z0-9 ]+$")]
     [string]$Region
 
-    ClusterEnvironment() {}
-
-    ClusterEnvironment([string] $resourceGroupName) {
-        $parts = $resourceGroupName -split '-'
-        if ($parts.Count -ne 3) {
-            throw "Malformed Flighting Ring name '$resourceGroupName'"
-        }
-        $this.FlightingRing = [ClusterFlightingRing]::new($parts[0..1] -join '-')
-        $this.Region = $parts[2]
-    }
-
-    [Cluster[]] GetClusters() {
-        return $this.GetChildResourceGroups() | % {
-            ($a, $b, $c, $index) = $_.ResourceGroupName -split "-"
-            [Cluster]@{
-                Environment = $this
-                Index       = $index
-            }
-        }
+    ClusterEnvironment([string] $resourceGroupName) : base($resourceGroupName) {
+        $this.FlightingRing = [ClusterFlightingRing]::new($this.Identity[0..1] -join "-")
+        $this.Region = $this.Identity | Select -Last 1
     }
 
     [Cluster] NewChildCluster() {
-        $indexes = $this.GetClusters().Index
+        $indexes = ($this.GetChildren() | % {[Cluster]::new($_)}).Index
         for ($index = 0; $index -in $indexes; $index++) {}
-        $cluster = [Cluster]@{
-            Environment = $this
-            Index       = $index
-        }
+        $cluster = [Cluster]::new("$this-$index")
         $cluster.Create()
         return $cluster
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -366,16 +290,9 @@ class Cluster : ClusterResourceGroup {
     [ValidateRange(0, 255)]
     [int]$Index
 
-    Cluster() {}
-
-    Cluster([string] $resourceGroupName) {
-        
-        $parts = $resourceGroupName -split '-'
-        if ($parts.Count -ne 4) {
-            throw "Malformed Cluster name '$resourceGroupName'"
-        }
-        $this.Environment = [ClusterService]::new($parts[0..2] -join '-')
-        $this.FlightingRing = $parts[3]
+    Cluster([string] $resourceGroupName) : base($resourceGroupName) {
+        $this.Environment = [Cluster]::new($this.Identity[0..2] -join "-")
+        $this.Index = $this.Indentity | Select -Last 1
     }
 
     [void] Create() {
@@ -399,6 +316,7 @@ class Cluster : ClusterResourceGroup {
             | Select -First 1
         return $config
     }
+
 
     [void] PublishConfiguration([string]$DefinitionsContainer, [datetime]$Expiry) {
         $context = $this.GetStorageContext()
