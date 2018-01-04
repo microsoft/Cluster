@@ -35,6 +35,13 @@ $ImageContainerName = "images"
 # abstract
 class ClusterResourceGroup {
 
+    [string[]]$Identity
+
+
+    ClusterResourceGroup([string] $resourceGroupName) {
+        $this.Identity = $resourceGroupName -split "-"
+    }
+
 
     [void] Create() {
         if ($this.Exists()) {
@@ -75,8 +82,8 @@ class ClusterResourceGroup {
     }
 
 
-    [LazyAzureStorageContext]$_StorageContext
-    [LazyAzureStorageContext] GetStorageContext() {
+    [IStorageContext]$_StorageContext
+    [IStorageContext] GetStorageContext() {
         if (-not $this._StorageContext) {
             $storageAccount = Get-AzureRmStorageAccount `
                 -ResourceGroupName $this
@@ -140,6 +147,46 @@ class ClusterResourceGroup {
         throw "NYI"
         # TODO: Generalize PropagateArtifacts to support all containers/blobs
         # and deprecate that method
+
+        $childContexts = $this.GetChildResourceGroups() `
+            | % {$_.ResourceGroupName} `
+            | % {Get-AzureRmStorageAccount -ResourceGroupName $_} `
+            | % {$_.Context}
+        $artifactNames = Get-AzureStorageBlob `
+            -Container $script:ArtifactContainerName `
+            -Context $this.GetStorageContext() `
+            | % {$_.Name}
+        
+        # async start copying blobs
+        $pendingBlobs = [ArrayList]::new()
+        foreach ($childContext in $childContexts) {
+            foreach ($artifactName in $artifactNames) {
+                $childBlob = Get-AzureStorageBlob `
+                    -Context $childContext `
+                    -Container $script:ArtifactContainerName `
+                    -Blob $artifactName `
+                    -ErrorAction SilentlyContinue
+                if (-not $childBlob) {
+                    $childBlob = Start-AzureStorageBlobCopy `
+                        -Context $this.GetStorageContext() `
+                        -DestContext $childContext `
+                        -SrcContainer $script:ArtifactContainerName `
+                        -DestContainer $script:ArtifactContainerName `
+                        -SrcBlob $artifactName `
+                        -DestBlob $artifactName
+                    $pendingBlobs.Add($childBlob)
+                }
+            }
+        }
+
+        # block until all copies are complete
+        foreach ($blob in $pendingBlobs) {
+            Get-AzureStorageBlobCopyState `
+                -Context $blob.Context `
+                -Container $script:ArtifactContainerName `
+                -Blob $blob.Name `
+                -WaitForComplete
+        }
     }
 
 
@@ -166,7 +213,7 @@ class ClusterResourceGroup {
 
     # abstract
     [string] ToString() {
-        throw "This method must be overriden in deriving class"
+        return $this.Identity -join "-"
     }
 
 
@@ -202,19 +249,8 @@ class ClusterService : ClusterResourceGroup {
     [ValidatePattern("^[A-Z][A-z0-9]+$")]
     [string]$Service
 
-    ClusterService() {}
+    ClusterService([string] $resourceGroupName) : base($resourceGroupName) {}
 
-    ClusterService([string] $resourceGroupName) {
-        $parts = $resourceGroupName -split '-'
-        if ($parts.Count -ne 1) {
-            throw "Malformed Service name '$resourceGroupName'"
-        }
-        $this.Service = $resourceGroupName
-    }
-
-    [string] ToString() {
-        return $this.Service
-    }
 }
 
 
@@ -251,10 +287,6 @@ class ClusterFlightingRing : ClusterResourceGroup {
                 Region        = $region
             }
         }
-    }
-
-    [string] ToString() {
-        return "$($this.Service)-$($this.FlightingRing)"
     }
 
 }
@@ -310,10 +342,6 @@ class ClusterEnvironment : ClusterResourceGroup {
         return $cluster
     }
 
-    [string] ToString() {
-        return "$($this.FlightingRing)-$($this.Region)"
-    }
-
 }
 
 
@@ -341,6 +369,7 @@ class Cluster : ClusterResourceGroup {
     Cluster() {}
 
     Cluster([string] $resourceGroupName) {
+        
         $parts = $resourceGroupName -split '-'
         if ($parts.Count -ne 4) {
             throw "Malformed Cluster name '$resourceGroupName'"
@@ -446,10 +475,6 @@ class Cluster : ClusterResourceGroup {
             -Verbose `
             -Force `
             | Write-Log
-    }
-
-    [string] ToString() {
-        return "$($this.Environment)-$($this.Index)"
     }
 
 }
