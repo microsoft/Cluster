@@ -78,10 +78,11 @@ class ClusterResourceGroup {
 
 
     [ClusterResourceGroup[]] GetChildren() {
-        return Get-AzureRmResourceGroup `
+        $children = Get-AzureRmResourceGroup `
             | % {$_.ResourceGroupName} `
             | ? {$_ -match "^$this-[^-]+$"} `
             | % {[ClusterResourceGroup]::new($_)}
+        return @($children)
     }
 
 
@@ -296,7 +297,7 @@ class Cluster : ClusterResourceGroup {
     }
 
     [void] Create() {
-        ($this -as [ClusterResourceGroup]).Create()
+        ([ClusterResourceGroup]$this).Create()
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
             -Name "configuration"
