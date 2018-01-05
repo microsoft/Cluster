@@ -46,10 +46,8 @@ Describe "Cluster types" {
         }
 
 
-        <##
-         # Uploads and propagation
-         #>
 
+        
         Context "Uploads and propagation" {
 
             It "Can upload artifacts" {
@@ -94,11 +92,13 @@ Describe "Cluster types" {
             It "Can create a cluster" {
                 $cluster0 = $Environment.NewChildCluster()
                 $cluster0 | Should -Not -BeNullOrEmpty
+                $cluster0.PublishConfiguration("$PSScriptRoot\Definitions", (Get-Date).AddHours(2))
             }
 
             It "Can create another cluster" {
                 $cluster1 = $Environment.NewChildCluster()
                 $cluster1 | Should -Not -BeNullOrEmpty
+                $cluster1.PublishConfiguration("$PSScriptRoot\Definitions", (Get-Date).AddHours(2))
             }
 
             It "Can redeploy clusters" {
