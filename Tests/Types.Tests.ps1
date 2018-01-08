@@ -57,7 +57,8 @@ Describe "Cluster types" {
                     -Context $Service.GetStorageContext() `
                     -Container $ArtifactContainerName `
                     -Blob "sampleblob.txt" `
-                    -Destination "$env:TEMP\sampleblob2.txt"
+                    -Destination "$env:TEMP\sampleblob2.txt" `
+                    -Force
                 Get-Content "$env:TEMP\sampleblob2.txt" | Should -Be "hello world"
             }
 
@@ -67,7 +68,8 @@ Describe "Cluster types" {
                     -Context $Environment.GetStorageContext() `
                     -Container $ArtifactContainerName `
                     -Blob "sampleblob.txt" `
-                    -Destination "$env:TEMP\sampleblob3.txt"
+                    -Destination "$env:TEMP\sampleblob3.txt" `
+                    -Force
                 Get-Content "$env:TEMP\sampleblob3.txt" | Should -Be "hello world"
             }
 
@@ -89,20 +91,29 @@ Describe "Cluster types" {
 
         Context "Clusters" {
 
+            $configs, $expiry = "$PSScriptRoot\Definitions", (Get-Date).AddHours(2)
+
             It "Can create a cluster" {
                 $cluster0 = $Environment.NewChildCluster()
                 $cluster0 | Should -Not -BeNullOrEmpty
-                $cluster0.PublishConfiguration("$PSScriptRoot\Definitions", (Get-Date).AddHours(2))
+                $deployment0 = $cluster0.PublishConfiguration($configs, $expiry)
+                $deployment0 | Write-Log
+                $deployment0.ProvisioningState | Should -Be "Succeeded"
             }
 
             It "Can create another cluster" {
                 $cluster1 = $Environment.NewChildCluster()
                 $cluster1 | Should -Not -BeNullOrEmpty
-                $cluster1.PublishConfiguration("$PSScriptRoot\Definitions", (Get-Date).AddHours(2))
+                $deployment1 = $cluster1.PublishConfiguration($configs, $expiry)
+                $deployment1 | Write-Log
+                $deployment1.ProvisioningState | Should -Be "Succeeded"
             }
 
             It "Can redeploy clusters" {
-                
+                $deployment0 = $cluster0.PublishConfiguration($configs, $expiry)
+                $deployment0.ProvisioningState | Should -Be "Succeeded"
+                $deployment1 = $cluster1.PublishConfiguration($configs, $expiry)
+                $deployment1.ProvisioningState | Should -Be "Succeeded"
             }
 
         }
@@ -111,8 +122,10 @@ Describe "Cluster types" {
 
         It "Can be cleaned up" {
             "sampleblob.txt", "sampleblob2.txt", "sampleblob3.txt" `
-                | % {Remove-Item "$env:TEMP\$_" -ErrorAction SilentlyContinue}
-            $Service, $FlightingRing, $Environment `
+                | % {"$env:TEMP\$_"} `
+                | ? {Test-Path $_} `
+                | % {Remove-Item $_}
+            $Service, $FlightingRing, $Environment, $cluster0, $cluster1 `
                 | % {Remove-AzureRmResourceGroup -Name $_ -Force -ErrorAction SilentlyContinue} `
                 | Out-Null
         }

@@ -20,6 +20,12 @@
                 "description": "Unstructured data available to the DSC"
             }
         },
+        "cseUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Full URL (including SAS token) to the custom script extension script"
+            }
+        },
         "dscFileName": {
             "type": "string",
             "metadata": {
@@ -273,72 +279,89 @@
                         "computerNamePrefix": "[substring(replace(resourceGroup().name, '-', ''), 0, 9)]",
                         "adminUsername": "[parameters('localAdminUsername')]",
                         "adminPassword": "[parameters('localAdminPassword')]"
-                    }
-                },
-                "networkProfile": {
-                    "networkInterfaceConfigurations": [
-                        {
-                            "name": "nic",
-                            "properties": {
-                                "primary": true,
-                                "ipConfigurations": [
-                                    {
-                                        "name": "ipconfig",
-                                        "properties": {
-                                            "subnet": {
-                                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', 'vnet'), '/subnets/subnet')]"
-                                            },
-                                            "loadBalancerBackendAddressPools": [
-                                                {
-                                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/backendAddressPools/pool')]"
-                                                }
-                                            ],
-                                            "loadBalancerInboundNatPools": [
-                                                {
-                                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/inboundNatPools/rdpPool')]"
-                                                }
-                                            ]
+                    },
+                    "networkProfile": {
+                        "networkInterfaceConfigurations": [
+                            {
+                                "name": "nic",
+                                "properties": {
+                                    "primary": true,
+                                    "ipConfigurations": [
+                                        {
+                                            "name": "ipconfig",
+                                            "properties": {
+                                                "subnet": {
+                                                    "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', 'vnet'), '/subnets/subnet')]"
+                                                },
+                                                "loadBalancerBackendAddressPools": [
+                                                    {
+                                                        "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/backendAddressPools/pool')]"
+                                                    }
+                                                ],
+                                                "loadBalancerInboundNatPools": [
+                                                    {
+                                                        "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'lb'), '/inboundNatPools/rdpPool')]"
+                                                    }
+                                                ]
+                                            }
                                         }
-                                    }
-                                ]
+                                    ]
+                                }
                             }
-                        }
-                    ]
-                },
-                "extensionProfile": {
-                    "extensions": [
-                        {
-                            "name": "Microsoft.Powershell.DSC",
-                            "properties": {
-                                "publisher": "Microsoft.Powershell",
-                                "type": "DSC",
-                                "typeHandlerVersion": "2.9",
-                                "autoUpgradeMinorVersion": true,
-                                "forceUpdateTag": "[parameters('dscHash')]",
-                                "settings": {
-                                    "configuration": {
-                                        "url": "[parameters('dscUrl')]",
-                                        "script": "[parameters('dscFileName')]",
-                                        "function": "Main"
+                        ]
+                    },
+                    "extensionProfile": {
+                        "extensions": [
+                            {
+                                "name": "Microsoft.Powershell.DSC",
+                                "properties": {
+                                    "publisher": "Microsoft.Powershell",
+                                    "type": "DSC",
+                                    "typeHandlerVersion": "2.20",
+                                    "autoUpgradeMinorVersion": true,
+                                    "forceUpdateTag": "[parameters('dscHash')]",
+                                    "settings": {
+                                        "configuration": {
+                                            "url": "[parameters('dscUrl')]",
+                                            "script": "[parameters('dscFileName')]",
+                                            "function": "Main"
+                                        },
+                                        "configurationArguments": {
+                                            "Environment": "[parameters('environment')]",
+                                            "ConfigData": "[parameters('configData')]",
+                                            "ServicePrincipalTenantId": "[parameters('servicePrincipalTenantId')]"
+                                        }
                                     },
-                                    "configurationArguments": {
-                                        "Environment": "[parameters('environment')]",
-                                        "ConfigData": "[parameters('configData')]",
-                                        "ServicePrincipalTenantId": "[parameters('servicePrincipalTenantId')]"
-                                    }
-                                },
-                                "protectedSettings": {
-                                    "configurationUrlSasToken": "[parameters('sasToken')]",
-                                    "configurationArguments": {
-                                        "ServicePrincipal": {
-                                            "UserName": "[parameters('servicePrincipalApplicationId')]",
-                                            "Password": "[parameters('servicePrincipalKey')]"
+                                    "protectedSettings": {
+                                        "configurationUrlSasToken": "[parameters('sasToken')]",
+                                        "configurationArguments": {
+                                            "ServicePrincipal": {
+                                                "UserName": "[parameters('servicePrincipalApplicationId')]",
+                                                "Password": "[parameters('servicePrincipalKey')]"
+                                            }
                                         }
                                     }
                                 }
+                            },
+                            {
+                                "name": "customScript",
+                                "properties": {
+                                    "publisher": "Microsoft.Compute",
+                                    "type": "CustomScriptExtension",
+                                    "typeHandlerVersion": "1.9",
+                                    "autoUpgradeMinorVersion": true,
+                                    "settings": {
+                                        "fileUris": [
+                                            "[concat(parameters('cseUrl'), parameters('sasToken'))]"
+                                        ]
+                                    },
+                                    "protectedSettings": {
+                                        "commandToExecute": "powershell .\\cse.ps1"
+                                    }
+                                }
                             }
-                        }
-                    ]
+                        ]
+                    }
                 }
             }
         }

@@ -31,6 +31,30 @@ $ImageContainerName = "images"
 
 
 
+function ConvertTo-HashTable {
+    Param(
+        [Parameter(ValueFromPipeline)]
+        [array]$object
+    )
+
+    foreach ($_ in $object) {
+        if ($_ -is [PSObject]) {
+            $hash = @{}
+            $properties = $_.PSObject.Properties | ? {$_.MemberType -eq "NoteProperty"}
+            foreach ($p in $properties) {
+                $hash[$p.Name] = $p.Value | ConvertTo-HashTable
+            }
+            Write-Output $hash
+        } else {
+            Write-Output $_
+        }
+    }
+}
+
+
+
+
+
 
 # abstract
 class ClusterResourceGroup {
@@ -97,20 +121,32 @@ class ClusterResourceGroup {
     }
 
 
-    [void] NewImage() {
-        throw "NYI"
-        # TODO: use the chriskuech/AzureBakery repo to create a new VHD
+    [void] NewImage([string[]] $WindowsFeature) {
+        New-BakedImage `
+            -Context $this.GetStorageContext() `
+            -WindowsFeature $WindowsFeature `
+            -StorageContainer $script:ImageContainerName
     }
 
 
     [void] PropagateArtifacts() {
+        $this.PropagateBlobs($script:ArtifactContainerName)
+    }
+
+
+    [void] PropagateImages() {
+        $this.PropagateBlobs($script:ImageContainerName)
+    }
+
+
+    [void] PropagateBlobs([string] $Container) {
         $children = $this.GetChildren()
         if (-not $children) {
             return
         }
         $childContexts = $children.GetStorageContext()
         $artifactNames = Get-AzureStorageBlob `
-            -Container $script:ArtifactContainerName `
+            -Container $Container `
             -Context $this.GetStorageContext() `
             | % {$_.Name}
         
@@ -120,15 +156,15 @@ class ClusterResourceGroup {
             foreach ($artifactName in $artifactNames) {
                 $childBlob = Get-AzureStorageBlob `
                     -Context $childContext `
-                    -Container $script:ArtifactContainerName `
+                    -Container $Container `
                     -Blob $artifactName `
                     -ErrorAction SilentlyContinue
                 if (-not $childBlob) {
                     $childBlob = Start-AzureStorageBlobCopy `
                         -Context $this.GetStorageContext() `
                         -DestContext $childContext `
-                        -SrcContainer $script:ArtifactContainerName `
-                        -DestContainer $script:ArtifactContainerName `
+                        -SrcContainer $Container `
+                        -DestContainer $Container `
                         -SrcBlob $artifactName `
                         -DestBlob $artifactName
                     $pendingBlobs.Add($childBlob)
@@ -140,19 +176,12 @@ class ClusterResourceGroup {
         foreach ($blob in $pendingBlobs) {
             Get-AzureStorageBlobCopyState `
                 -Context $blob.Context `
-                -Container $script:ArtifactContainerName `
+                -Container $Container `
                 -Blob $blob.Name `
                 -WaitForComplete
         }
 
-        $children.PropagateArtifacts()
-    }
-
-
-    [void] PropagateBlobs() {
-        throw "NYI"
-        # TODO: Generalize PropagateArtifacts to support all containers/blobs
-        # and deprecate that method
+        $children.PropagateBlobs($Container)
     }
 
 
@@ -168,14 +197,14 @@ class ClusterResourceGroup {
         $secretNames = (Get-AzureKeyVaultSecret -VaultName $keyVaultName).Name
         foreach ($childKeyVaultName in $childKeyVaultNames) {
             foreach ($secretName in $secretNames) {
-                $secretValue = Get-AzureKeyVaultSecret `
+                $secret = Get-AzureKeyVaultSecret `
                     -VaultName $keyVaultName `
-                    -Name $secretName `
-                    | % {$_.SecretValue}
+                    -Name $secretName
                 Set-AzureKeyVaultSecret `
                     -VaultName $childKeyVaultName `
                     -Name $secretName `
-                    -SecretValue $secretValue
+                    -SecretValue $secret.SecretValue `
+                    -ContentType $secret.Attributes.ContentType
             }
         }
         $children.PropagateSecrets()
@@ -317,7 +346,7 @@ class Cluster : ClusterResourceGroup {
     }
 
 
-    [void] PublishConfiguration([string]$DefinitionsContainer, [datetime]$Expiry) {
+    [PSResourceGroupDeployment] PublishConfiguration([string]$DefinitionsContainer, [datetime]$Expiry) {
         $context = $this.GetStorageContext()
 
         # build url components
@@ -382,16 +411,17 @@ class Cluster : ClusterResourceGroup {
         # freeform json passed to the DSC
         $configDataFile = $this.GetConfig($DefinitionsContainer, "config.json")
         if ($configDataFile) {
-            $deploymentParams["ConfigData"] = Get-Content $configDataFile -Raw | ConvertFrom-Json | ConvertTo-HashTable
+            $deploymentParams["ConfigData"] = Get-Content $configDataFile -Raw `
+                | ConvertFrom-Json `
+                | ConvertTo-HashTable
         }
     
         # deploy template
-        New-AzureRmResourceGroupDeployment `
+        return New-AzureRmResourceGroupDeployment `
             -Name ((Get-Date -Format "s") -replace "[^\d]") `
             @deploymentParams `
             -Verbose `
-            -Force `
-            | Write-Log
+            -Force
     }
 
 }
