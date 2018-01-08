@@ -6,332 +6,276 @@ $InformationPreference = "Continue"
 
 
 
-<#
-.SYNOPSIS
-Creates a ClusterService, ClusterFlightingRing, ClusterEnvironment, or Cluster from a resource group name
+<##
+ # New cluster set
+ #>
 
-.DESCRIPTION
-Infers the type of the Cluster node from a resource group name and returns the associated ClusterService, ClusterFlightingRing, ClusterEnvironment, or Cluster object
-
-.PARAMETER ResourceGroupName
-Name of the Azure Resource Group name representing a cluster resource group
-
-.EXAMPLE
-$MyClusterEnvironment = ConvertTo-ClusterType -ResourceGroupName "MyService-DEV-EastUS"
-#>
-function ConvertTo-ClusterType {
-    Param(
-        [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [string]$ResourceGroupName
-    )
-
-    $height = ($resourceGroupName -split "-").Count
-    $type = switch ($height) {
-        1 {[ClusterService]}
-        2 {[ClusterFlightingRing]}
-        3 {[ClusterEnvironment]}
-        4 {[Cluster]}
-        default {throw "Invalid Cluster resource group name '$resourceGroupName'"}
-    }
-
-    return $type::new($resourceGroupName)
-}
-
-
-
-
-
-
-<#
-.SYNOPSIS
-Creates a new Service in Azure
-
-.DESCRIPTION
-Creates a new Service resource group for Cluster flighting
-
-.PARAMETER Service
-Name used to identify the service
-
-.EXAMPLE
-New-ClusterService -Service "MyService"
-
-.NOTES
-Requires a correctly set AzureRM context
-#>
 function New-ClusterService {
     Param(
         [Parameter(Mandatory)]
-        [string]$Service
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [Alias('ServiceName')]
+        [string]$Name
     )
 
-    # create and validate new service model and resources
-    $clusterService = [ClusterService]@{
-        Service = $Service
-    }
-    if ($clusterService.Exists()) {
-        throw "Service '$Service' already exists"
-    }
-    $clusterService.Create()
-
-    return $clusterService
+    $service = [ClusterService]::new($Name)
+    $service.Create()
+    return $service
 }
 
 
-
-<#
-.SYNOPSIS
-Creates a new Flighting Ring in Azure
-
-.DESCRIPTION
-Creates a new Flighting Ring resource group for Cluster flighting
-
-.PARAMETER Service
-Name used to identify the service
-
-.PARAMETER FlightingRing
-Name used to identify the flighting ring
-
-.EXAMPLE
-New-ClusterFlightingRing -Service "MyService" -FlightingRing "DEV"
-
-.NOTES
-Requires a correctly set AzureRM context
-#>
 function New-ClusterFlightingRing {
     Param(
-        [Parameter(Mandatory)]
-        [string]$Service,
-        [Parameter(Mandatory)]
-        [string]$FlightingRing
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [string]$ServiceName,
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidateNotNullOrEmpty()]
+        [ClusterService]$Service,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidatePattern("^[A-Z]{3,6}$")]
+        [Alias('FlightingRingName')]
+        [string]$Name
     )
 
-    # create and validate new flighting ring model and resources
-    $clusterFlightingRing = [ClusterFlightingRing]@{
-        Service       = $Service
-        FlightingRing = $FlightingRing
+    $id = switch ($PSCmdlet.ParameterSetName) {
+        "Components" {"$ServiceName-$Name"}
+        "Object" {"$Service-$Name"}
     }
-    if ($clusterFlightingRing.Exists()) {
-        throw "Flighting Ring '$clusterFlightingRing' already exists"
-    }
-    $clusterFlightingRing.Create()
-
-    return $clusterFlightingRing
+    $flightingRing = [ClusterFlightingRing]::new($id)
+    $flightingRing.Create()
+    return $flightingRing
 }
 
 
-
-<#
-.SYNOPSIS
-Creates a new Environment in Azure
-
-.DESCRIPTION
-Creates a new Environment resource group for Cluster flighting
-
-.PARAMETER Service
-Name used to identify the service
-
-.PARAMETER FlightingRing
-Name used to identify the flighting ring
-
-.PARAMETER Region
-Name used to identify the region
-
-.EXAMPLE
-New-ClusterEnvironnment -Service "MyService" -FlightingRing "DEV" -Region "EastUS"
-
-.NOTES
-Requires a correctly set AzureRM context
-#>
 function New-ClusterEnvironment {
     Param(
-        [Parameter(Mandatory)]
-        [string]$Service,
-        [Parameter(Mandatory)]
-        [string]$FlightingRing,
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [string]$ServiceName,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z]{3,6}$")]
+        [string]$FlightingRingName,
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidateNotNullOrEmpty()]
+        [ClusterFlightingRing]$FlightingRing,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidatePattern("^[A-z][A-z0-9 ]+$")]
+        [Alias('RegionName')]
         [string]$Region
     )
 
-    # create and validate flighting ring model
-    $clusterFlightingRing = [ClusterFlightingRing]@{
-        Service       = $Service
-        FlightingRing = $FlightingRing
+    $id = switch ($PSCmdlet.ParameterSetName) {
+        "Components" {"$ServiceName-$FlightingRingName-$Region"}
+        "Object" {"$FlightingRing-$Region"}
     }
-    if (-not $clusterFlightingRing.Exists()) {
-        throw "Flighting Ring '$clusterFlightingRing' does not exist"
-    }
-
-    # create and validate new environment model and resources
-    $clusterEnvironment = [ClusterEnvironment]@{
-        FlightingRing = $clusterFlightingRing
-        Region        = $Region
-    }
-    if ($clusterEnvironment.Exists()) {
-        throw "Environment '$clusterEnvironment' already exists"
-    }
-    $clusterEnvironment.Create()
-
-    return $clusterEnvironment
+    $environment = [ClusterEnvironment]::new($id)
+    $environment.Create()
+    return $environment
 }
 
 
-<#
-.SYNOPSIS
-Creates a new Cluster in Azure
-
-.DESCRIPTION
-Long description
-
-.PARAMETER Service
-Name used to identify the service
-
-.PARAMETER FlightingRing
-Name used to identify the flighting ring
-
-.PARAMETER Region
-Name used to identify the region
-
-.EXAMPLE
-New-Cluster -Service "MyService" -FlightingRing "DEV" -Region "EastUS"
-
-.NOTES
-Requires a correctly set AzureRM context
-#>
 function New-Cluster {
     Param(
-        [Parameter(Mandatory)]
-        [string]$Service,
-        [Parameter(Mandatory)]
-        [string]$FlightingRing,
-        [Parameter(Mandatory)]
-        [string]$Region
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [string]$ServiceName,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z]{3,6}$")]
+        [string]$FlightingRingName,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-z][A-z0-9 ]+$")]
+        [string]$Region,
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidateNotNullOrEmpty()]
+        [ClusterEnvironment]$Environment,
+        [ValidateScript( {Test-Script $_} )]
+        [string]$DefinitionsContainer = (Resolve-Path "."),
+        [ValidateNotNullOrEmpty()]
+        [datetime]$Expiry = [datetime]::MaxValue
     )
 
-    # create and validate flighting ring model
-    $clusterFlightingRing = [ClusterFlightingRing]@{
-        Service       = $Service
-        FlightingRing = $FlightingRing
+    if (-not $Environment) {
+        $Environment = [ClusterEnvironment]::new("$ServiceName-$FlightingRingName-$RegionName")
     }
-    if (-not $clusterFlightingRing.Exists()) {
-        throw "Flighting Ring '$clusterFlightingRing' does not exist"
-    }
-
-    # create and validate environment model
-    $clusterEnvironment = [ClusterEnvironment]@{
-        FlightingRing = $clusterFlightingRing
-        Region        = $Region
-    }
-    if (-not $clusterEnvironment.Exists()) {
-        throw "Environment '$clusterEnvironment' does not exist"
-    }
-
-    # create cluster model and resources
-    $cluster = [Cluster]@{
-        Environment = $clusterEnvironment
-        Index       = $clusterEnvironment.NextIndex()
-    }
-    $cluster.Create()
-
+    $cluster = $Environment.NewChildCluster()
+    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
     return $cluster
 }
 
 
 
-function Publish-ClusterArtifact {
+<##
+ # Get cluster set
+ #>
+
+function Get-ClusterService {
     Param(
-        [Parameter(Mandatory, ParameterSetName='Object')]
-        [Cluster]
-        [Parameter(Mandatory, ParameterSetName='Components')]
-        [string]$Service,
         [Parameter(Mandatory)]
-        [string]$FlightingRing,
-        [Parameter(Mandatory)]
-        [ValidateScript( {Test-Path $_ -PathType Leaf} )]
-        [string]$ArtifactPath,
-        [switch]$Sync
+        [Alias('ServiceName')]
+        [string]$Name
     )
 
-    # create and validate flighting ring model
-    $clusterFlightingRing = [ClusterFlightingRing]@{
-        Service       = $Service
-        FlightingRing = $FlightingRing
-    }
-    if (-not $clusterFlightingRing.Exists()) {
-        throw "Flighting Ring '$clusterFlightingRing' does not exist"
-    }
+    return [ClusterService]::new($Name)
+}
 
-    # upload blob to flighting ring
-    $clusterFlightingRing.UploadArtifact($ArtifactPath)
 
-    # push to descendents
-    if ($Sync) {
-        $clusterFlightingRing.PropagateArtifacts()
+function Get-ClusterFlightingRing {
+    Param(
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [string]$ServiceName,
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ClusterService]$Service,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidatePattern("^[A-Z]{3,6}$")]
+        [Alias('FlightingRingName')]
+        [string]$Name
+    )
+
+    $id = switch ($PSCmdlet.ParameterSetName) {
+        "Components" {"$ServiceName-$Name"}
+        "Object" {"$Service-$Name"}
     }
+    return [ClusterFlightingRing]::new($id)
+}
+
+
+function Get-ClusterEnvironment {
+    Param(
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [string]$ServiceName,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z]{3,6}$")]
+        [string]$FlightingRingName,
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ClusterFlightingRing]$FlightingRing,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidatePattern("^[A-z][A-z0-9 ]+$")]
+        [Alias('RegionName')]
+        [string]$Region
+    )
+
+    $id = switch ($PSCmdlet.ParameterSetName) {
+        "Components" {"$ServiceName-$FlightingRingName-$Region"}
+        "Object" {"$FlightingRing-$Region"}
+    }
+    return [ClusterEnvironment]::new($id)
+}
+
+
+function Get-Cluster {
+    Param(
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z][A-z0-9]+$")]
+        [string]$ServiceName,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-Z]{3,6}$")]
+        [string]$FlightingRingName,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [ValidatePattern("^[A-z][A-z0-9 ]+$")]
+        [string]$Region,
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidateNotNullOrEmpty()]
+        [ClusterEnvironment]$Environment,
+        [Parameter(Mandatory, ParameterSetName = 'Components')]
+        [Parameter(Mandatory, ParameterSetName = 'Object')]
+        [ValidateRange(0, 255)]
+        [int]$Index
+    )
+
+    $id = switch ($PSCmdlet.ParameterSetName) {
+        "Components" {"$ServiceName-$FlightingRingName-$Region-$Index"}
+        "Object" {"$Environment-$Index"}
+    }
+    return [Cluster]::new($id)
+}
+
+
+<## 
+ # Publish to cluster set
+ #>
+
+function Publish-ClusterArtifact {
+    Param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [ClusterResourceGroup]$ClusterSet,
+        [Parameter(Mandatory)]
+        [ValidateScript( {Test-Script $_} )]
+        [string]$Path
+    )
+
+    $ClusterSet.UploadArtifact($Path)
+    $ClusterSet.PropagateArtifacts()
 }
 
 
 function Publish-ClusterSecret {
     Param(
         [Parameter(Mandatory)]
-        [string]$ResourceGroupName,
+        [ValidateNotNullOrEmpty()]
+        [ClusterResourceGroup]$ClusterSet,
         [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string]$Name,
         [Parameter(Mandatory)]
-        [string]$Value,
-        [string]$ContentType = "text/plain",
-        [switch]$Sync
+        [ValidateNotNullOrEmpty()]
+        [SecureString]$Value,
+        [string]$ContentType = "text/plain"
     )
-    
-    $vaultName = (Get-AzureRmKeyVault -ResourceGroupName $ResourceGroupName).VaultName
+
     Set-AzureKeyVaultSecret `
-        -VaultName $vaultName `
+        -VaultName (Get-AzureRmKeyVault -ResourceGroupName $ClusterSet).VaultName `
         -ContentType $ContentType `
         -Name $Name `
         -SecretValue $Value
+    $ClusterSet.PropagateSecrets()
 }
 
 
-function Publish-ClusterImage {
+function New-ClusterImage {
+    Param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [ClusterResourceGroup]$ClusterSet,
+        [string[]]$WindowsFeature = @()
+    )
 
+    $ClusterSet.NewImage($WindowsFeature)
+    $ClusterSet.PropagateImages()
 }
 
 
 function Publish-ClusterConfiguration {
     Param(
-
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [Cluster[]]$Cluster,
+        [ValidateScript( {Test-Script $_} )]
+        [string]$DefinitionsContainer = (Resolve-Path "."),
+        [ValidateNotNullOrEmpty()]
+        [datetime]$Expiry = [datetime]::MaxValue
     )
+
+    $Cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
 }
 
 
 
-<#
-.SYNOPSIS
-Queries Azure for clusters
+<##
+ # Utilitiies
+ #>
 
-.DESCRIPTION
-Filters Azure resource groups by the provided parameters and returns the associated Cluster objects.  Supports globs in parameter names.
-
-.PARAMETER Service
-Parameter See README for terminology
-
-.PARAMETER FlightingRing
-Parameter See README for terminology
-
-.PARAMETER Region
-Parameter See README for terminology
-
-.PARAMETER Index
-Parameter See README for terminology
-
-.EXAMPLE
-An example
-
-#>
 function Select-Cluster {
     Param(
-        [string]$Service = "*",
-        [string]$FlightingRing = "*",
+        [string]$ServiceName = "*",
+        [string]$FlightingRingName = "*",
         [string]$Region = "*",
         [string]$Index = "*"
     )

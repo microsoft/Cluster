@@ -1,3 +1,6 @@
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingConvertToSecureStringWithPlainText", "")]
+Param()
+
 
 $ErrorActionPreference = "Stop"
 
@@ -18,6 +21,72 @@ $DefinitionsContainer = ".\Definitions"
 Describe "Cluster cmdlets" {
 
     try {
+
+        Context "Creation" {
+            It "Can create services" {
+                $service = New-ClusterService -Name $ServiceName
+                @(Get-AzureRmResourceGroup -Name $service).Count | Should -Be 1
+                @(Get-AzureRmStorageAccount -ResourceGroupName $service).Count | Should -Be 1
+                @(Get-AzureRmKeyVault -ResourceGroupName $service).Count | Should -Be 1
+            }
+
+            It "Can create flighting rings" {
+                $flightingRing = New-ClusterFlightingRing -Service $service -Name $FlightingRingName
+                @(Get-AzureRmResourceGroup -Name $flightingRing).Count | Should -Be 1
+                @(Get-AzureRmStorageAccount -ResourceGroupName $flightingRing).Count | Should -Be 1
+                @(Get-AzureRmKeyVault -ResourceGroupName $flightingRing).Count | Should -Be 1
+            }
+
+            It "Can create environments" {
+                $environment = New-ClusterEnvironment -FlightingRing $flightingRing -Region $RegionName
+                @(Get-AzureRmResourceGroup -Name $environment).Count | Should -Be 1
+                @(Get-AzureRmStorageAccount -ResourceGroupName $environment).Count | Should -Be 1
+                @(Get-AzureRmKeyVault -ResourceGroupName $environment).Count | Should -Be 1
+            }
+        }
+
+
+
+        Context "Uploads and propagation" {
+            It "Can upload artifacts" {
+                $artifactContent, $artifactPath = "hello world", "$env:TEMP\sampleblob.txt"
+                $artifactContent | Out-File $artifactPath -Force
+                ( {Publish-ClusterArtifact -ClusterSet $service -ArtifactPath $artifactPath} ) | Should -Not -Throw
+                Get-AzureStorageBlobContent `
+                    -Context $service.GetStorageContext() `
+                    -Container $ArtifactContainerName `
+                    -Blob (Split-Path $artifactPath -Leaf) `
+                    -Destination "$env:TEMP\sampleblob2.txt" `
+                    -Force
+                Get-Content "$env:TEMP\sampleblob2.txt" | Should -Be $artifactContent
+            }
+
+            It "Automatically propagates uploaded artifacts" {
+                Get-AzureStorageBlobContent `
+                    -Context $environment.GetStorageContext() `
+                    -Container $ArtifactContainerName `
+                    -Blob (Split-Path $artifactPath -Leaf) `
+                    -Destination "$env:TEMP\sampleblob3.txt" `
+                    -Force
+                Get-Content "$env:TEMP\sampleblob3.txt" | Should -Be $artifactContent
+            }
+
+            It "Can upload secrets" {
+                $secretName, $secretValue = "mySecret", "myValue"
+                ( {Publish-ClusterSecret -ClusterSet $service -Name $secretName -Value $secretValue} ) | Should -Not -Throw
+                Get-AzureKeyVaultSecret `
+                    -VaultName (Get-AzureRmKeyVault -ResourceGroupName $environment).VaultName `
+                    -Name "mySecret" `
+                    | % {$_.SecretValueText} `
+                    | Should -Be "myValue"
+            }
+
+            It "Can automatically propagate uploaded secrets" {
+                
+            }
+
+        }
+
 
         It "Can create flighting rings" {
             $flightingRing = New-ClusterFlightingRing `

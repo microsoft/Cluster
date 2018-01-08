@@ -9,29 +9,19 @@
         "value": "Standard_D2_v2"
       },
       "localAdminUserName": {
-        "value": "onerfuser"
+        "value": "MyTestUsername"
       },
       "localAdminPassword": {
-        "reference": {
-          "keyVault": {
-            "id": "/subscriptions/64302270-7aa4-4ae3-86a4-e7d41b6f1a1a/resourceGroups/RTProdResourceGroup/providers/Microsoft.KeyVault/vaults/RTProdKeyVault"
-          },
-          "secretName": "OneRFDeploymentsLocalAdmin-Password"
-        }
+        "value": "MyTestPassword42"
       },
       "servicePrincipalApplicationId": {
-        "value": "c8439299-8adc-434d-9322-b3d2a176bb23"
+        "value": "<servicePrincipalApplicationId>"
       },
       "servicePrincipalTenantId": {
-        "value": "72f988bf-86f1-41af-91ab-2d7cd011db47"
+        "value": "<servicePrincipalTenantId>"
       },
       "servicePrincipalKey": {
-        "reference": {
-          "keyVault": {
-            "id": "/subscriptions/64302270-7aa4-4ae3-86a4-e7d41b6f1a1a/resourceGroups/RTProdResourceGroup/providers/Microsoft.KeyVault/vaults/RTProdKeyVault"
-          },
-          "secretName": "OneRFDeploymentsServicePrincipal-Key"
-        }
+        "value": "<ServicePrincipalKey>"
       }
     }
   }
