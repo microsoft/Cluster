@@ -120,7 +120,7 @@ Describe "Cluster types" {
 
     } finally {
 
-        It "Can be cleaned up" {
+        It "Can be cleaned up" -Skip {
             "sampleblob.txt", "sampleblob2.txt", "sampleblob3.txt" `
                 | % {"$env:TEMP\$_"} `
                 | ? {Test-Path $_} `
