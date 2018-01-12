@@ -91,7 +91,7 @@ function New-Cluster {
         [Parameter(Mandatory, ParameterSetName = 'Object')]
         [ValidateNotNullOrEmpty()]
         [ClusterEnvironment]$Environment,
-        [ValidateScript( {Test-Script $_} )]
+        [ValidateScript( {Test-Path $_} )]
         [string]$DefinitionsContainer = (Resolve-Path "."),
         [ValidateNotNullOrEmpty()]
         [datetime]$Expiry = [datetime]::MaxValue
@@ -207,7 +207,7 @@ function Publish-ClusterArtifact {
         [ValidateNotNullOrEmpty()]
         [ClusterResourceGroup]$ClusterSet,
         [Parameter(Mandatory)]
-        [ValidateScript( {Test-Script $_} )]
+        [ValidateScript( {Test-Path $_} )]
         [string]$Path
     )
 
@@ -257,7 +257,7 @@ function Publish-ClusterConfiguration {
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [Cluster[]]$Cluster,
-        [ValidateScript( {Test-Script $_} )]
+        [ValidateScript( {Test-Path $_} )]
         [string]$DefinitionsContainer = (Resolve-Path "."),
         [ValidateNotNullOrEmpty()]
         [datetime]$Expiry = [datetime]::MaxValue
