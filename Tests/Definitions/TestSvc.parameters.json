@@ -6,7 +6,7 @@
         "value": 1
       },
       "vmSku": {
-        "value": "Standard_D2_v2"
+        "value": "Standard_A2"
       },
       "localAdminUserName": {
         "value": "MyTestUsername"

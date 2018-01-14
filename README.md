@@ -130,11 +130,17 @@ Publish-ClusterSecret `
 
 
 #### Accessing underlying resources
-Cluster management objects serialize to their resource group name, allowing for intuitive integration with the rest of the Azure PowerShell API.  All Azure resources can be obtained by passing in the `-ResourceGroupName $node` to their respective `Get-AzureRm*` cmdlet.  The following example demonstrates how to obtain an Azure Storage Context for integrating with the storage API.  
+Cluster management objects stringify to their resource group name, allowing for intuitive integration with the rest of the Azure PowerShell API.  All Azure resources can be obtained by passing in the `-ResourceGroupName $node` to their respective `Get-AzureRm*` cmdlet.  The following example demonstrates how to obtain an Azure Storage Context for integrating with the storage API.  
 
 ```PowerShell
-$storage = Get-AzureRmStorageAccount -ResourceGroupName $environment
-$context = $storage.Context
+# use the $environment ClusterEnvironment object to access the Cluster's storage context
+$context = (Get-AzureRmStorageAccount -ResourceGroupName $environment).Context
+
+# delete artifacts that are older than 30 days
+$containerInfo = @{Container = "artifacts"; Context = $context}
+Get-AzureStorageBlob @containerInfo `
+    | ? {$_.LastModified -lt (Get-Date).AddDays(-30)} `
+    | % {Remove-AzureStorageBlob -Blob $_.Name @containerInfo}
 ```
 
 ### Clusters
@@ -192,18 +198,32 @@ Configurations for a service should be stored in a `DefinitionsContainer` and ba
 | Custom Script Extension | cse.ps1         | Optional |
 | Generic JSON            | config.json     | Optional |
 
+<a name="configselection"></a>
+
+### Config selection
+Given a Service `MyService`, Flighting Ring `PROD`, Region `WestUS2`, Config Extension `config.json`, and Definitions Container `.\Definitions`, Cluster will select the first config it finds from the below list:
+
+|   | Selected Config path                             | Associated Tree node     |
+| - | ------------------------------------------------ | ------------------------ |
+| 1 | .\Definitions\MyService.PROD.WestUS2.config.json | Specified Environment    |
+| 2 | .\Definitions\MyService.PROD.config.json         | Specified Flighting Ring |
+| 3 | .\Definitions\MyService.config.json              | Specified Service        |
+| 4 | .\Definitions\Default.PROD.WestUS2.config.json   | Default Environnment     |
+| 5 | .\Definitions\Default.PROD.config.json           | Default Flighting Ring   |
+| 6 | .\Definitions\Default.config.json                | Default Service          |
+
 
 ### Template parameters
 Azure Resource Manager Templates used by Cluster must include the following parameters, which will be generated and passed in by `Publish-ClusterConfiguration`.
 
 * **VhdContainer**: URL to the blob storage container containing disks.  Use in the VM or VMSS resource definition in the template.  
-  *Must be supported in template*
+  *Must be supported*
 
 * **SasToken**: Azure Storage SAS Token for the Cluster Storage Account's "configuration" blob container.  The template should use the SAS token in DSC or CSE extension definitions to download the DSC (`configuration/dsc.zip`) or CSE (`configuration/cse.ps1`).  
-  *Must be supported in template*
+  *Must be supported*
 
 * **Environment**: Environment ID of the Environment containing this Cluster.  
-  *Must be supported in template*
+  *Must be supported*
 
 * **DscUrl**: Full URL of the DSC, authenticated with a SAS token.  The template should use this parameter to download the DSC.  
   *Must be supported if and only if a `*.dsc.ps1` file is present* 
@@ -222,12 +242,9 @@ Azure Resource Manager Templates used by Cluster must include the following para
 
 
 
-### Config Selection
-Configs are selected...
-
-
-
 ## Contributing
+
+### Contributor License Agreement (CLA)
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
@@ -240,3 +257,7 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+### Unit Testing
+
+[Pester](https://github.com/pester/Pester/wiki/Pester) tests are required for all changes.  Due to the nature of this module (creating Azure resources), these tests cost money to run and are therefore only run manually.

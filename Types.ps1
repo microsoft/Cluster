@@ -13,7 +13,7 @@ using namespace Microsoft.Azure.Commands.Common.Authentication.Abstractions
 using namespace System.Collections
 
 # required for importing types
-Import-Module AzureRm
+Import-Module "..\AzureBakery", "AzureRm"
 
 # where region-agnostic resources are defined
 $DefaultRegion = "West US 2"
@@ -72,18 +72,22 @@ class ClusterResourceGroup {
         if ($this.Exists()) {
             throw "Resource Group '$this' already exists"
         }
-        New-AzureRmResourceGroup -Name $this -Location $script:DefaultRegion
+        $region = @{
+            $True = $this.Identity[2]
+            $False = $script:DefaultRegion
+        }[$this.Identity.Count -ge 3]
+        New-AzureRmResourceGroup -Name $this -Location $region
         New-AzureRmStorageAccount `
             -ResourceGroupName $this `
             -Name ([ClusterResourceGroup]::NewResourceName()) `
-            -Location $script:DefaultRegion `
+            -Location $region `
             -Type "Standard_LRS" `
             -EnableEncryptionService "blob" `
             -EnableHttpsTrafficOnly $true
         New-AzureRmKeyVault `
             -VaultName ([ClusterResourceGroup]::NewResourceName()) `
             -ResourceGroupName $this `
-            -Location $script:DefaultRegion
+            -Location $region
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
             -Name $script:ArtifactContainerName
@@ -409,11 +413,9 @@ class Cluster : ClusterResourceGroup {
         }
 
         # freeform json passed to the DSC
-        $configDataFile = $this.GetConfig($DefinitionsContainer, "config.json")
-        if ($configDataFile) {
-            $deploymentParams["ConfigData"] = Get-Content $configDataFile -Raw `
-                | ConvertFrom-Json `
-                | ConvertTo-HashTable
+        $configJsonFile = $this.GetConfig($DefinitionsContainer, "config.json")
+        if ($configJsonFile) {
+            $deploymentParams["ConfigJson"] = Get-Content $configJsonFile -Raw
         }
     
         # deploy template
