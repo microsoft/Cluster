@@ -1,11 +1,13 @@
 
 Configuration Main {
     Param(
-        [string]$Environment,
-        [PSObject]$ConfigData,
-        [string]$ServicePrincipalTenantId,
-        [hashtable]$ServicePrincipal
+        $Environment,
+        $ConfigJson,
+        $ServicePrincipalTenantId,
+        $ServicePrincipal
     )
+
+    $ConfigData = $ConfigJson | ConvertFrom-Json
 
     Import-DscResource -ModuleName "PSDesiredStateConfiguration" -Name "Log"
 

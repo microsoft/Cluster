@@ -14,8 +14,8 @@
                 "description": "Admin username on all VMs."
             }
         },
-        "configData": {
-            "type": "object",
+        "configJson": {
+            "type": "string",
             "metadata": {
                 "description": "Unstructured data available to the DSC"
             }
@@ -97,6 +97,7 @@
         "vmSku": {
             "type": "string",
             "allowedValues": [
+                "Standard_A2",
                 "Standard_D2_v2",
                 "Standard_D4_v2",
                 "Standard_F16",
@@ -328,7 +329,7 @@
                                         },
                                         "configurationArguments": {
                                             "Environment": "[parameters('environment')]",
-                                            "ConfigData": "[parameters('configData')]",
+                                            "ConfigJson": "[parameters('configJson')]",
                                             "ServicePrincipalTenantId": "[parameters('servicePrincipalTenantId')]"
                                         }
                                     },

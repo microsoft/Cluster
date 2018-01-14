@@ -12,7 +12,7 @@ Import-Module AzureRm
 
 $Service = [ClusterService]::new("TestSvc")
 $FlightingRing = [ClusterFlightingRing]::new("TestSvc-DEV")
-$Environment = [ClusterEnvironment]::new("TestSvc-DEV-WestUS2")
+$Environment = [ClusterEnvironment]::new("TestSvc-DEV-EastUS")
 
 
 
@@ -93,27 +93,31 @@ Describe "Cluster types" {
 
             $configs, $expiry = "$PSScriptRoot\Definitions", (Get-Date).AddHours(2)
 
+            $clusterA = $Environment.NewChildCluster()
+            $clusterAInitialDeployment = $clustera.PublishConfiguration($configs, $expiry)
+            $clusterAInitialDeployment | Write-Log
+
+            $clusterB = $Environment.NewChildCluster()
+            $clusterBInitialDeployment = $clusterB.PublishConfiguration($configs, $expiry)
+            $clusterB | Write-Log
+
+            $clusterARedeployment = $clusterA.PublishConfiguration($configs, $expiry)
+            $clusterBRedeployment = $clusterB.PublishConfiguration($configs, $expiry)
+
+
             It "Can create a cluster" {
-                $cluster0 = $Environment.NewChildCluster()
-                $cluster0 | Should -Not -BeNullOrEmpty
-                $deployment0 = $cluster0.PublishConfiguration($configs, $expiry)
-                $deployment0 | Write-Log
-                $deployment0.ProvisioningState | Should -Be "Succeeded"
+                $clusterA | Should -Not -BeNullOrEmpty
+                $clusterAInitialDeployment.ProvisioningState | Should -Be "Succeeded"
             }
 
             It "Can create another cluster" {
-                $cluster1 = $Environment.NewChildCluster()
-                $cluster1 | Should -Not -BeNullOrEmpty
-                $deployment1 = $cluster1.PublishConfiguration($configs, $expiry)
-                $deployment1 | Write-Log
-                $deployment1.ProvisioningState | Should -Be "Succeeded"
+                $clusterb | Should -Not -BeNullOrEmpty
+                $clusterBInitialDeployment.ProvisioningState | Should -Be "Succeeded"
             }
 
             It "Can redeploy clusters" {
-                $deployment0 = $cluster0.PublishConfiguration($configs, $expiry)
-                $deployment0.ProvisioningState | Should -Be "Succeeded"
-                $deployment1 = $cluster1.PublishConfiguration($configs, $expiry)
-                $deployment1.ProvisioningState | Should -Be "Succeeded"
+                $clusterARedeployment.ProvisioningState | Should -Be "Succeeded"
+                $clusterBRedeployment.ProvisioningState | Should -Be "Succeeded"
             }
 
         }
@@ -125,7 +129,7 @@ Describe "Cluster types" {
                 | % {"$env:TEMP\$_"} `
                 | ? {Test-Path $_} `
                 | % {Remove-Item $_}
-            $Service, $FlightingRing, $Environment, $cluster0, $cluster1 `
+            $Service, $FlightingRing, $Environment, $clustera, $clusterb `
                 | % {Remove-AzureRmResourceGroup -Name $_ -Force -ErrorAction SilentlyContinue} `
                 | Out-Null
         }
