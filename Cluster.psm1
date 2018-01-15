@@ -87,7 +87,8 @@ function New-Cluster {
         [string]$FlightingRingName,
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-z][A-z0-9 ]+$")]
-        [string]$Region,
+        [Alias('Region')]
+        [string]$RegionName,
         [Parameter(Mandatory, ParameterSetName = 'Object')]
         [ValidateNotNullOrEmpty()]
         [ClusterEnvironment]$Environment,
@@ -101,7 +102,7 @@ function New-Cluster {
         $Environment = [ClusterEnvironment]::new("$ServiceName-$FlightingRingName-$RegionName")
     }
     $cluster = $Environment.NewChildCluster()
-    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
+    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry) | Write-Log
     return $cluster
 }
 
@@ -179,7 +180,8 @@ function Get-Cluster {
         [string]$FlightingRingName,
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-z][A-z0-9 ]+$")]
-        [string]$Region,
+        [Alias('Region')]
+        [string]$RegionName,
         [Parameter(Mandatory, ParameterSetName = 'Object')]
         [ValidateNotNullOrEmpty()]
         [ClusterEnvironment]$Environment,
@@ -190,7 +192,7 @@ function Get-Cluster {
     )
 
     $id = switch ($PSCmdlet.ParameterSetName) {
-        "Components" {"$ServiceName-$FlightingRingName-$Region-$Index"}
+        "Components" {"$ServiceName-$FlightingRingName-$RegionName-$Index"}
         "Object" {"$Environment-$Index"}
     }
     return [Cluster]::new($id)
@@ -263,7 +265,7 @@ function Publish-ClusterConfiguration {
         [datetime]$Expiry = [datetime]::MaxValue
     )
 
-    $Cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
+    $Cluster.PublishConfiguration($DefinitionsContainer, $Expiry) | Write-Log
 }
 
 
@@ -274,13 +276,16 @@ function Publish-ClusterConfiguration {
 
 function Select-Cluster {
     Param(
+        [Alias('Service')]
         [string]$ServiceName = "*",
+        [Alias('FlightingRing')]
         [string]$FlightingRingName = "*",
-        [string]$Region = "*",
+        [Alias('Region')]
+        [string]$RegionName = "*",
         [string]$Index = "*"
     )
 
-    $query = "$Service-$FlightingRing-$Region-$Index"
+    $query = "$ServiceName-$FlightingRingName-$RegionName-$Index"
     return Get-AzureRmResourceGroup `
         | ? {$_.ResourceGroupName -like $query} `
         | % {[Cluster]::new($_.ResourceGroupName)}
