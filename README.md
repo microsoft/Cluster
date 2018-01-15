@@ -18,7 +18,7 @@ This module requires PowerShell 5+ and the AzureRM PowerShell module.  This modu
 `Get-Help "<cmdlet>"` will get the help information for any cmdlets you discover through `Get-Command`.  All cmdlets are described in this README as well.
 
 ### Installation
-This module is available in the PowerShell Gallery.  PowerShell 5+ is required.  Install with
+This module is available in the PowerShell Gallery.  PowerShell 5 is required.  Install with
 ```PowerShell
 Install-Module "Cluster"
 ```
@@ -65,7 +65,7 @@ Cluster IDs are defined by their parent Environment and a unique, automatically 
 "MyService-DEV-WestUS2-0"
 ```
 
-Cluster management objects serialize to their ID
+Cluster management objects stringify to their ID
 
 ```PowerShell
 PS C:\> $environment = Get-ClusterEnvironment `
@@ -112,7 +112,7 @@ $environment = Get-ClusterEnvironment `
 ```
 
 
-#### Flighting (Uploading artifacts and secrets)
+#### Uploading Artifacts and Secrets
 
 Artifacts and secrets can be published to any node and automatically propagated to descendant nodes.
 ```PowerShell
@@ -237,7 +237,7 @@ Azure Resource Manager Templates used by Cluster must include the following para
 * **CseUrl**: The SAS token authenticated URL of the Custom Script Extension.  The template should use this parameter to download the Custom Script Extension.  
   *Must be supported if and only if a `*.cse.ps1` file is present*
 
-* **ConfigData**: The JSON object passed to the template as a parameter of type `object`.  The template should use this parameter to pass in Cluster-specific configuration data to the DSC or CSE.  
+* **ConfigJson**: The JSON `string` passed to the template.  The template should use this parameter to pass in Cluster-specific configuration data to the DSC or CSE.  
   *Must be supported if and only if a `*.config.json` file is present*
 
 
