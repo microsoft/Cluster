@@ -31,24 +31,41 @@ $ImageContainerName = "images"
 
 
 
-function ConvertTo-HashTable {
+<#
+.SYNOPSIS
+Writes formatted execution status messages to the Information stream
+
+.DESCRIPTION
+Prepends message lines with execution information and timestamp
+
+.PARAMETER Message
+The message(s) logged to the Information stream.  Objects are serialized before writing.
+
+.EXAMPLE
+"Hello", "World" | Write-Log
+
+#>
+function Write-Log {
     Param(
         [Parameter(ValueFromPipeline)]
-        [array]$object
+        $Message
     )
 
-    foreach ($_ in $object) {
-        if ($_ -is [PSObject]) {
-            $hash = @{}
-            $properties = $_.PSObject.Properties | ? {$_.MemberType -eq "NoteProperty"}
-            foreach ($p in $properties) {
-                $hash[$p.Name] = $p.Value | ConvertTo-HashTable
-            }
-            Write-Output $hash
-        } else {
-            Write-Output $_
+    begin {
+        # 'Write-Log' seemingly nondeterministically appears in the call stack
+        $stack = Get-PSCallStack | % {$_.Command} | ? {("<ScriptBlock>", "Write-Log") -notcontains $_}
+        if ($stack) {
+            [array]::reverse($stack)
+            $stack = " | $($stack -join " > ")"
         }
+        $timestamp = Get-Date -Format "T"
     }
+
+    process {
+        $Message = ($Message | Format-List | Out-String) -split "[\r\n]+" | ? {$_}
+        $Message | % {Write-Information "[$timestamp$stack] $_" -InformationAction Continue}
+    }
+
 }
 
 
