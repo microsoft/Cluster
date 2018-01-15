@@ -242,6 +242,20 @@ Azure Resource Manager Templates used by Cluster must include the following para
 
 
 
+## Troubleshooting
+
+### Common Issues
+
+If you receive errors due to VM SKU availability, ensure you have core allocation for your region:
+```PowerShell
+Get-AzureRmComputeResourceSku `
+    | ? {$_.ResourceType -eq "virtualMachines" -and -not $_.Restrictions} `
+    | Select Name, Locations
+```
+
+
+
+
 ## Contributing
 
 ### Contributor License Agreement (CLA)
