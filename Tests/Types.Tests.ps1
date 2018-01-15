@@ -94,7 +94,7 @@ Describe "Cluster types" {
             $configs, $expiry = "$PSScriptRoot\Definitions", (Get-Date).AddHours(2)
 
             $clusterA = $Environment.NewChildCluster()
-            $clusterAInitialDeployment = $clustera.PublishConfiguration($configs, $expiry)
+            $clusterAInitialDeployment = $clusterA.PublishConfiguration($configs, $expiry)
             $clusterAInitialDeployment | Write-Log
 
             $clusterB = $Environment.NewChildCluster()
@@ -129,7 +129,7 @@ Describe "Cluster types" {
                 | % {"$env:TEMP\$_"} `
                 | ? {Test-Path $_} `
                 | % {Remove-Item $_}
-            $Service, $FlightingRing, $Environment, $clustera, $clusterb `
+            $Service, $FlightingRing, $Environment, $clusterA, $clusterB `
                 | % {Remove-AzureRmResourceGroup -Name $_ -Force -ErrorAction SilentlyContinue} `
                 | Out-Null
         }

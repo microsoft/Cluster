@@ -15,7 +15,7 @@ Import-Module "$PSScriptRoot\..\Cluster" -Force
 $ServiceName = "TestSvc"
 $FlightingRingName = "DEV"
 $RegionName = "EastUS"
-$DefinitionsContainer = ".\Definitions"
+$DefinitionsContainer = "$PSScriptRoot\Definitions"
 
 
 
@@ -26,23 +26,34 @@ Describe "Cluster cmdlets" {
 
     try {
 
+
+        # creation
+        $service = New-ClusterService -Name $ServiceName
+        $flightingRing = New-ClusterFlightingRing -Service $service -Name $FlightingRingName
+        $environment = New-ClusterEnvironment -FlightingRing $flightingRing -Region $RegionName
+
+        # artifact/secret upload/propagation
+        $artifactContent, $artifactPath = "hello world", "$env:TEMP\sampleblob.txt"
+        $artifactContent | Out-File $artifactPath -Force
+
+        # cluster management
+        $cluster = New-Cluster -Environment $environment -DefinitionsContainer $DefinitionsContainer
+
+
         Context "Creation" {
             It "Can create services" {
-                $service = New-ClusterService -Name $ServiceName
                 @(Get-AzureRmResourceGroup -Name $service).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $service).Count | Should -Be 1
                 @(Get-AzureRmKeyVault -ResourceGroupName $service).Count | Should -Be 1
             }
 
             It "Can create flighting rings" {
-                $flightingRing = New-ClusterFlightingRing -Service $service -Name $FlightingRingName
                 @(Get-AzureRmResourceGroup -Name $flightingRing).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $flightingRing).Count | Should -Be 1
                 @(Get-AzureRmKeyVault -ResourceGroupName $flightingRing).Count | Should -Be 1
             }
 
             It "Can create environments" {
-                $environment = New-ClusterEnvironment -FlightingRing $flightingRing -Region $RegionName
                 @(Get-AzureRmResourceGroup -Name $environment).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $environment).Count | Should -Be 1
                 @(Get-AzureRmKeyVault -ResourceGroupName $environment).Count | Should -Be 1
@@ -51,15 +62,9 @@ Describe "Cluster cmdlets" {
 
 
 
-
-
-
-
         Context "Uploads and propagation" {
             It "Can upload and automatically propagate artifacts" {
-                $artifactContent, $artifactPath = "hello world", "$env:TEMP\sampleblob.txt"
-                $artifactContent | Out-File $artifactPath -Force
-                ( {Publish-ClusterArtifact -ClusterSet $service -ArtifactPath $artifactPath} ) | Should -Not -Throw
+                ( {Publish-ClusterArtifact -ClusterSet $service -Path $artifactPath} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $environment.GetStorageContext() `
                     -Container $ArtifactContainerName `
@@ -71,7 +76,8 @@ Describe "Cluster cmdlets" {
 
             It "Can upload and automatically propagate secrets" {
                 $secretName, $secretValue = "mySecret", "myValue"
-                ( {Publish-ClusterSecret -ClusterSet $service -Name $secretName -Value $secretValue} ) | Should -Not -Throw
+                $secretValueSecure = $secretValue | ConvertTo-SecureString -AsPlainText -Force
+                ( {Publish-ClusterSecret -ClusterSet $service -Name $secretName -Value $secretValueSecure} ) | Should -Not -Throw
                 Get-AzureKeyVaultSecret `
                     -VaultName (Get-AzureRmKeyVault -ResourceGroupName $environment).VaultName `
                     -Name $secretName `
@@ -83,11 +89,8 @@ Describe "Cluster cmdlets" {
 
 
 
-
-
         Context "Cluster management" {
             It "Can create clusters" {
-                $cluster = New-Cluster -Environment $environment -DefinitionsContainer $DefinitionsContainer
                 @(Get-AzureRmResourceGroup -Name $cluster).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $cluster).Count | Should -Be 1
                 @(Get-AzureRmKeyVault -ResourceGroupName $cluster).Count | Should -Be 1
@@ -104,7 +107,7 @@ Describe "Cluster cmdlets" {
 
         Context "Reading" {
             It "Can get services" {
-                $gottenService = Get-ClusterService -Service $service
+                $gottenService = Get-ClusterService -Name $ServiceName
                 "$gottenService" | Should -Be "$service"
             } 
 
@@ -119,12 +122,12 @@ Describe "Cluster cmdlets" {
             }
 
             It "Can get clusters" {
-                $gottenCluster = Get-Cluster -Environment $environment -Region $RegionName
+                $gottenCluster = Get-Cluster -Environment $environment -Index 0
                 "$gottenCluster" | Should -Be "$cluster"
             }
 
             It "Can select clusters" {
-                $selectedCluster = Select-Cluster -ServiceName "TestSvc"
+                $selectedCluster = Select-Cluster -ServiceName $ServiceName
                 "$selectedCluster" | Should -Be "$cluster"
             }
         }
@@ -133,13 +136,13 @@ Describe "Cluster cmdlets" {
 
     } finally {
 
-        It "Can be cleaned up" {
-            "sampleblob.txt", "sampleblob2.txt", "sampleblob3.txt" `
-                | % {Remove-Item "$env:TEMP\$_" -ErrorAction SilentlyContinue}
-            $FlightingRing, $Environment `
-                | % {Remove-AzureRmResourceGroup -Name $_ -Force -ErrorAction SilentlyContinue} `
-                | Out-Null
-        }
+        # cleanup
+
+        $service, $flightingRing, $environment, $cluster `
+            | % {Remove-AzureRmResourceGroup -Name $_ -Force} `
+            | Out-Null
+        "sampleblob.txt", "sampleblob2.txt", "sampleblob3.txt" `
+            | % {Remove-Item "$env:TEMP\$_" -ErrorAction SilentlyContinue}
 
     }
 }
