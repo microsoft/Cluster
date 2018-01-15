@@ -13,7 +13,7 @@ using namespace Microsoft.Azure.Commands.Common.Authentication.Abstractions
 using namespace System.Collections
 
 # required for importing types
-Import-Module "..\AzureBakery", "AzureRm"
+Import-Module "AzureRm"
 
 # where region-agnostic resources are defined
 $DefaultRegion = "West US 2"
@@ -90,7 +90,7 @@ class ClusterResourceGroup {
             throw "Resource Group '$this' already exists"
         }
         $region = @{
-            $True = $this.Identity[2]
+            $True  = $this.Identity[2]
             $False = $script:DefaultRegion
         }[$this.Identity.Count -ge 3]
         New-AzureRmResourceGroup -Name $this -Location $region
@@ -129,6 +129,12 @@ class ClusterResourceGroup {
             | % {[ClusterResourceGroup]::new($_)}
         return @($children)
     }
+    
+
+    [ClusterResourceGroup[]] GetDescendants() {
+        $children = $this.GetChildren()
+        return $children + ($children | % {$_.GetDescendants()})
+    }
 
 
     [IStorageContext]$_StorageContext
@@ -144,7 +150,7 @@ class ClusterResourceGroup {
 
     [void] NewImage([string[]] $WindowsFeature) {
         New-BakedImage `
-            -Context $this.GetStorageContext() `
+            -StorageContext $this.GetStorageContext() `
             -WindowsFeature $WindowsFeature `
             -StorageContainer $script:ImageContainerName
     }
@@ -161,7 +167,7 @@ class ClusterResourceGroup {
 
 
     [void] PropagateBlobs([string] $Container) {
-        $children = $this.GetChildren()
+        $children = $this.GetDescendants()
         if (-not $children) {
             return
         }

@@ -13,12 +13,12 @@ This module requires PowerShell 5+ and the AzureRM PowerShell module.  This modu
 
 
 ### Finding Commands
-`Get-Command "*-Cluster*"` will list all cmdlets from this module.
+`(Get-Module "Cluster").ExportedCommands` will list all cmdlets from this module.
 
-`Get-Help "<cmdlet>"` will get the help information for any cmdlets you discover through `Get-Command`.  All cmdlets are described in this README as well.
+`Get-Help "<cmdlet>"` will show the documentation for .  All cmdlets are described in this README as well.
 
 ### Installation
-This module is available in the PowerShell Gallery.  PowerShell 5 is required.  Install with
+This module is available in the PowerShell Gallery.  PowerShell 5 is required.  Install with:
 ```PowerShell
 Install-Module "Cluster"
 ```
@@ -150,8 +150,8 @@ A cluster is a resource group that can independently serve some version of the S
 #### Creation
 The cmdlet will automatically generate a new unique index for the Cluster, create the standard Service Tree node resources, then publish a *[Configuration](#configurations)* to the Cluster.  
 `New-Cluster` follows the same parameter conventions as the other `New-Cluster*` modules with two additional parameters:
-* *[DefinitionsContainer](#definitionscontainer)* (default is current location)
-* *[Expiry](#expiry)* (default is never)
+* *DefinitionsContainer*, the folder path containing your [Configurations](#configurations) (default is current location)
+* *[Expiry](#expiry)*, the date that the configuration expires in Azure (default is never)
 
 ```PowerShell
 $cluster = New-Cluster `
@@ -239,6 +239,56 @@ Azure Resource Manager Templates used by Cluster must include the following para
 
 * **ConfigJson**: The JSON `string` passed to the template.  The template should use this parameter to pass in Cluster-specific configuration data to the DSC or CSE.  
   *Must be supported if and only if a `*.config.json` file is present*
+
+
+<a name"expiry"></a>
+
+## Lifespan of Configurations
+
+Azure uses [SAS tokens](https://docs.microsoft.com/en-us/azure/storage/common/storage-dotnet-shared-access-signature-part-1) to authenticate access to storage blobs.  Cluster uses read-only SAS tokens to bootstrap assets.  By default, these SAS tokens will not expire; however, cmdlets leveraging SAS tokens support the `[[-Expiry] <datetime>]` parameter to specify when the token should expire.
+
+Any resources redeploying/scaling using this SAS token after the expiry date will be unhealthy.  To support autoscale, a Cluster must use the default infinite expiry or redeploy the configuration prior to the expiry date.  VSTS can be configured to support timed deployments, circumventing this issue.
+
+The script below can be used in a VSTS release task to deploy cluster-by-cluster to a given environment:
+
+```PowerShell
+Param(
+    $ServiceName = "MyService",
+    $FlightingRingName,
+    $RegionName
+)
+
+# throw terminating error if a deployment fails
+$ErrorActionPreference = "Stop"
+
+# run in hosted VSTS to download and install the modules without elevation
+Install-Module "AzureRM", "Cluster" -Scope CurrentUser
+Import-Module  "Cluster"
+
+# get the clusters within our target environment
+$clusters = Select-Cluster $ServiceName $FlightingRingName $RegionName
+
+# deploy each cluster 
+foreach ($cluster in $clusters) {
+    Publish-ClusterConfiguration `
+        -Cluster $cluster `
+        -DefinitionsContainer ".\Definitions" `
+        -Expiry (Get-Date).AddDays(14)
+}
+```
+
+
+## Troubleshooting
+
+### Common Issues
+
+If you receive errors due to VM SKU availability, ensure you have core allocation for your region:
+```PowerShell
+Get-AzureRmComputeResourceSku `
+    | ? {$_.ResourceType -eq "virtualMachines" -and -not $_.Restrictions} `
+    | Select Name, Locations
+```
+
 
 
 
