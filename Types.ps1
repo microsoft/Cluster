@@ -129,6 +129,12 @@ class ClusterResourceGroup {
             | % {[ClusterResourceGroup]::new($_)}
         return @($children)
     }
+    
+
+    [ClusterResourceGroup[]] GetDescendants() {
+        $children = $this.GetChildren()
+        return $children + ($children | % {$_.GetDescendants()})
+    }
 
 
     [IStorageContext]$_StorageContext
@@ -144,7 +150,7 @@ class ClusterResourceGroup {
 
     [void] NewImage([string[]] $WindowsFeature) {
         New-BakedImage `
-            -Context $this.GetStorageContext() `
+            -StorageContext $this.GetStorageContext() `
             -WindowsFeature $WindowsFeature `
             -StorageContainer $script:ImageContainerName
     }
@@ -161,7 +167,7 @@ class ClusterResourceGroup {
 
 
     [void] PropagateBlobs([string] $Container) {
-        $children = $this.GetChildren()
+        $children = $this.GetDescendants()
         if (-not $children) {
             return
         }
