@@ -151,7 +151,7 @@ A cluster is a resource group that can independently serve some version of the S
 The cmdlet will automatically generate a new unique index for the Cluster, create the standard Service Tree node resources, then publish a *[Configuration](#configurations)* to the Cluster.  
 `New-Cluster` follows the same parameter conventions as the other `New-Cluster*` modules with two additional parameters:
 * *DefinitionsContainer*, the folder path containing your [Configurations](#configurations) (default is current location)
-* *[Expiry](#expiry)* (default is never)
+* *[Expiry](#expiry)*, the date that the configuration expires in Azure (default is never)
 
 ```PowerShell
 $cluster = New-Cluster `
@@ -240,6 +240,8 @@ Azure Resource Manager Templates used by Cluster must include the following para
 * **ConfigJson**: The JSON `string` passed to the template.  The template should use this parameter to pass in Cluster-specific configuration data to the DSC or CSE.  
   *Must be supported if and only if a `*.config.json` file is present*
 
+
+<a name"expiry"></a>
 
 ## Lifespan of Configurations
 
