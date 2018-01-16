@@ -111,6 +111,13 @@ class ClusterResourceGroup {
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
             -Name $script:ImageContainerName
+        $parentId = ($this.Identity | Select -SkipLast 1) -join "-"
+        if ($parentId) {
+            $parent = [ClusterResourceGroup]::new($parentId)
+            $parent.PropagateArtifacts()
+            $parent.PropagateImages()
+            $parent.PropagateSecrets()
+        }
     }
 
 
@@ -440,7 +447,21 @@ class Cluster : ClusterResourceGroup {
         if ($configJsonFile) {
             $deploymentParams["ConfigJson"] = Get-Content $configJsonFile -Raw
         }
-    
+
+        # baked Windows Image URL
+        $images = Get-AzureStorageBlob `
+            -Context $this.GetStorageContext() `
+            -Container $script:ImageContainerName
+        if ($images) {
+            $imageName = $images | Sort LastModified -Descending | Select -First 1 | % Name
+            $sasToken = New-AzureStorageContainerSASToken `
+                -Context $context `
+                -Container "images" `
+                -Permission "r" `
+                -ExpiryTime $expiry
+            $deploymentParams["ImageUrl"] = "$($context.BlobEndPoint)images/$imageName$sasToken"
+        }
+
         # deploy template
         return New-AzureRmResourceGroupDeployment `
             -Name ((Get-Date -Format "s") -replace "[^\d]") `

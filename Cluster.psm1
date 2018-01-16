@@ -10,9 +10,6 @@ $InformationPreference = "Continue"
  # New cluster set
  #>
 
-<<<<<<< HEAD
-function New-ClusterService {
-=======
 
 
 function New-ClusterService {
@@ -32,7 +29,6 @@ function New-ClusterService {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory)]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -47,8 +43,6 @@ function New-ClusterService {
 
 
 function New-ClusterFlightingRing {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Creates a new Flighting Ring in Azure and returns the associated ClusterFlightingRing object
@@ -76,7 +70,6 @@ function New-ClusterFlightingRing {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -102,8 +95,6 @@ function New-ClusterFlightingRing {
 
 
 function New-ClusterEnvironment {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Creates a new Environment in Azure and returns the associated ClusterEnvironment object
@@ -134,7 +125,6 @@ function New-ClusterEnvironment {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -163,8 +153,6 @@ function New-ClusterEnvironment {
 
 
 function New-Cluster {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Creates a new Cluster in Azure and returns the associated Cluster object
@@ -201,7 +189,6 @@ function New-Cluster {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -237,8 +224,6 @@ function New-Cluster {
  #>
 
 function Get-ClusterService {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Gets the ClusterService object
@@ -255,7 +240,6 @@ function Get-ClusterService {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory)]
         [Alias('ServiceName')]
@@ -267,8 +251,6 @@ function Get-ClusterService {
 
 
 function Get-ClusterFlightingRing {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Gets the ClusterFlightingRing object
@@ -291,7 +273,6 @@ function Get-ClusterFlightingRing {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -314,8 +295,6 @@ function Get-ClusterFlightingRing {
 
 
 function Get-ClusterEnvironment {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Gets the ClusterEnvironment object
@@ -341,7 +320,6 @@ function Get-ClusterEnvironment {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -367,8 +345,6 @@ function Get-ClusterEnvironment {
 
 
 function Get-Cluster {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Gets the Cluster object
@@ -397,7 +373,6 @@ function Get-Cluster {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory, ParameterSetName = 'Components')]
         [ValidatePattern("^[A-Z][A-z0-9]+$")]
@@ -431,8 +406,6 @@ function Get-Cluster {
  #>
 
 function Publish-ClusterArtifact {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Uploads an artifact to the specified ClusterSet
@@ -453,7 +426,6 @@ function Publish-ClusterArtifact {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -469,8 +441,6 @@ function Publish-ClusterArtifact {
 
 
 function Publish-ClusterSecret {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Creates a new secret
@@ -499,7 +469,6 @@ function Publish-ClusterSecret {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -522,9 +491,6 @@ function Publish-ClusterSecret {
 }
 
 
-<<<<<<< HEAD
-function New-ClusterImage {
-=======
 function Publish-ClusterImage {
     <#
     .SYNOPSIS
@@ -546,7 +512,6 @@ function Publish-ClusterImage {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -560,8 +525,6 @@ function Publish-ClusterImage {
 
 
 function Publish-ClusterConfiguration {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Pushes a new Resource Manager Template configuration to the Cluster resource group
@@ -585,7 +548,6 @@ function Publish-ClusterConfiguration {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -606,8 +568,6 @@ function Publish-ClusterConfiguration {
  #>
 
 function Select-Cluster {
-<<<<<<< HEAD
-=======
     <#
     .SYNOPSIS
     Returns an array of Cluster objects matching the parameters
@@ -633,7 +593,6 @@ function Select-Cluster {
     .NOTES
     Must be logged into Azure
     #>
->>>>>>> AzureBakery
     Param(
         [Alias('Service')]
         [string]$ServiceName = "*",
