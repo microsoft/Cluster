@@ -51,9 +51,10 @@ function Write-Log {
         $Message
     )
 
+    # create the values used to prefix log lines
     begin {
-        # 'Write-Log' seemingly nondeterministically appears in the call stack
-        $stack = Get-PSCallStack | % {$_.Command} | ? {("<ScriptBlock>", "Write-Log") -notcontains $_}
+        # Remove unhelpful calls in the callstack
+        $stack = Get-PSCallStack | % {$_.Command} | ? {$_ -notin ("<ScriptBlock>", "Write-Log")}
         if ($stack) {
             [array]::reverse($stack)
             $stack = " | $($stack -join " > ")"
@@ -61,6 +62,7 @@ function Write-Log {
         $timestamp = Get-Date -Format "T"
     }
 
+    # write the input $Message with formatting to the Information stream
     process {
         $Message = ($Message | Format-List | Out-String) -split "[\r\n]+" | ? {$_}
         $Message | % {Write-Information "[$timestamp$stack] $_" -InformationAction Continue}
@@ -73,26 +75,30 @@ function Write-Log {
 
 
 
-# abstract
 class ClusterResourceGroup {
 
-    # Indentity vector
+    # Indentity vector (path through the service tree)
     [string[]]$Identity
 
 
+    # create a ClusterResourceGroup model object from its resource group name
     ClusterResourceGroup([string] $resourceGroupName) {
         $this.Identity = $resourceGroupName -split "-"
     }
 
-
+    # use the values encapsulated in this model object to provision Azure resources
     [void] Create() {
         if ($this.Exists()) {
             throw "Resource Group '$this' already exists"
         }
+
+        # determine if this resource group has a speified region (for Environments and Clusters)
         $region = @{
             $True  = $this.Identity[2]
             $False = $script:DefaultRegion
         }[$this.Identity.Count -ge 3]
+
+        # create and initialize the Azure resources
         New-AzureRmResourceGroup -Name $this -Location $region
         New-AzureRmStorageAccount `
             -ResourceGroupName $this `
@@ -111,6 +117,8 @@ class ClusterResourceGroup {
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
             -Name $script:ImageContainerName
+
+        # if the resource group has a parent (isn't a 'Service'), propagate assets from parent to this
         $parentId = ($this.Identity | Select -SkipLast 1) -join "-"
         if ($parentId) {
             $parent = [ClusterResourceGroup]::new($parentId)
@@ -121,6 +129,7 @@ class ClusterResourceGroup {
     }
 
 
+    # returns whether this model's Azure resources have been created
     [bool] Exists() {
         $resourceGroup = Get-AzureRmResourceGroup `
             -ResourceGroupName $this `
@@ -129,6 +138,7 @@ class ClusterResourceGroup {
     }
 
 
+    # returns a model for each child service tree node that has been provisioned in Azure
     [ClusterResourceGroup[]] GetChildren() {
         $children = Get-AzureRmResourceGroup `
             | % {$_.ResourceGroupName} `
@@ -136,14 +146,14 @@ class ClusterResourceGroup {
             | % {[ClusterResourceGroup]::new($_)}
         return @($children)
     }
-    
 
+    # returns a model for each descendant service tree node that has been provisioned in Azure
     [ClusterResourceGroup[]] GetDescendants() {
         $children = $this.GetChildren()
         return $children + ($children | % {$_.GetDescendants()})
     }
 
-
+    # lazily instantiates an Azure Storage Context for use with the Azure.Storage module
     [IStorageContext]$_StorageContext
     [IStorageContext] GetStorageContext() {
         if (-not $this._StorageContext) {
@@ -155,6 +165,7 @@ class ClusterResourceGroup {
     }
 
 
+    # uses the AzureBakery nested module for creating a generalized Windows VHD containing the specified Windows Features
     [void] NewImage([string[]] $WindowsFeature) {
         New-BakedImage `
             -StorageContext $this.GetStorageContext() `
@@ -163,16 +174,17 @@ class ClusterResourceGroup {
     }
 
 
+    # pushes Artifacts from this service tree node to its descendants
     [void] PropagateArtifacts() {
         $this.PropagateBlobs($script:ArtifactContainerName)
     }
 
-
+    # pushes Images from this service tree node to its descendants
     [void] PropagateImages() {
         $this.PropagateBlobs($script:ImageContainerName)
     }
 
-
+    # pushes Blobs in the specified container from this service tree node to its descendants
     [void] PropagateBlobs([string] $Container) {
         $children = $this.GetDescendants()
         if (-not $children) {
@@ -215,10 +227,12 @@ class ClusterResourceGroup {
                 -WaitForComplete
         }
 
+        # push from the children node to their children
         $children.PropagateBlobs($Container)
     }
 
 
+    # pushes Azure Key Vault Secrets from this service tree node to its descendants
     [void] PropagateSecrets() {
         $children = $this.GetChildren()
         if (-not $children) { 
@@ -245,12 +259,13 @@ class ClusterResourceGroup {
     }
 
 
-    # abstract
+    # returns this model's associated resource group name
     [string] ToString() {
         return $this.Identity -join "-"
     }
 
 
+    # determines the service tree node type (discouraged as it inherently breaks linting)
     [Reflection.TypeInfo] InferType() {
         switch ($this.Identity.Count) {
             1 {return [ClusterService]}
@@ -259,10 +274,11 @@ class ClusterResourceGroup {
             4 {return [Cluster]}
         }
         throw "Cannot infer type of '$this'"
-        return [void]
+        return [void] # return value to not break linting
     }
 
 
+    # uploads an Artifact (file required for the VM/Container/etc to initialize) to the service tree node
     [void] UploadArtifact([string] $ArtifactPath) {
         Set-AzureStorageBlobContent `
             -File $ArtifactPath `
@@ -273,6 +289,7 @@ class ClusterResourceGroup {
     }
 
 
+    # creates a base36 GUID with a (module declared) prefix and valid length for creating globally unique Azure resource names
     static [string] NewResourceName() {
         $Length = 24
         $allowedChars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -333,12 +350,13 @@ class ClusterEnvironment : ClusterResourceGroup {
         $this.Region = $this.Identity | Select -Last 1
     }
 
+    # creates a Cluster Azure resource group group that is a child of this model and returns the Cluster's model
     [Cluster] NewChildCluster() {
-        $indexes = ($this.GetChildren() | % {[Cluster]::new($_)}).Index
-        for ($index = 0; $index -in $indexes; $index++) {}
-        $cluster = [Cluster]::new("$this-$index")
-        $cluster.Create()
-        return $cluster
+        $indexes = ($this.GetChildren() | % {[Cluster]::new($_)}).Index # get currently used indexes
+        for ($index = 0; $index -in $indexes; $index++) {} # determine lowest available index
+        $cluster = [Cluster]::new("$this-$index") # create a Cluster model with the index
+        $cluster.Create() # create the Azure resources from the Cluster model
+        return $cluster # return the Cluster model
     }
 
 }
@@ -359,6 +377,7 @@ class Cluster : ClusterResourceGroup {
         $this.Index = $this.Identity | Select -Last 1
     }
 
+    # create a service tree node resource group and resources, with additional Clsuter-specific resources
     [void] Create() {
         ([ClusterResourceGroup]$this).Create()
         New-AzureStorageContainer `
@@ -369,6 +388,7 @@ class Cluster : ClusterResourceGroup {
             -Name "disks"
     }
 
+    # uses the Cluster configuration inheritence model (see README) to identify the most specific config with the specified extension
     [string] GetConfig([string]$DefinitionsContainer, [string]$FileExtension) {
         ($service, $flightingRing, $region, $index) = $this.Identity
         $config = $service, "Default" `
