@@ -13,7 +13,7 @@ using namespace Microsoft.Azure.Commands.Common.Authentication.Abstractions
 using namespace System.Collections
 
 # required for importing types
-Import-Module "AzureRm"
+Import-Module "AzureRm", "$PSScriptRoot\AzureBakery"
 
 # where region-agnostic resources are defined
 $DefaultRegion = "West US 2"
