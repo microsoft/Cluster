@@ -95,11 +95,11 @@ Describe "Cluster types" {
 
             $clusterA = $Environment.NewChildCluster()
             $clusterAInitialDeployment = $clusterA.PublishConfiguration($configs, $expiry)
-            $clusterAInitialDeployment | Write-Log
+            $clusterAInitialDeployment
 
             $clusterB = $Environment.NewChildCluster()
             $clusterBInitialDeployment = $clusterB.PublishConfiguration($configs, $expiry)
-            $clusterB | Write-Log
+            $clusterB
 
             $clusterARedeployment = $clusterA.PublishConfiguration($configs, $expiry)
             $clusterBRedeployment = $clusterB.PublishConfiguration($configs, $expiry)

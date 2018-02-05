@@ -15,60 +15,6 @@ using namespace System.Collections
 # required for importing types
 Import-Module "AzureRm", "$PSScriptRoot\AzureBakery"
 
-# where region-agnostic resources are defined
-$DefaultRegion = "West US 2"
-
-# string preceding a random string on underlying resource names
-$DefaultResourcePrefix = "cluster"
-
-# name of the blob storage container containing service artifacts
-$ArtifactContainerName = "artifacts"
-
-# name of the blob storage container containing VM images
-$ImageContainerName = "images"
-
-
-
-
-
-<#
-.SYNOPSIS
-Writes formatted execution status messages to the Information stream
-
-.DESCRIPTION
-Prepends message lines with execution information and timestamp
-
-.PARAMETER Message
-The message(s) logged to the Information stream.  Objects are serialized before writing.
-
-.EXAMPLE
-"Hello", "World" | Write-Log
-
-#>
-function Write-Log {
-    Param(
-        [Parameter(ValueFromPipeline)]
-        $Message
-    )
-
-    # create the values used to prefix log lines
-    begin {
-        # Remove unhelpful calls in the callstack
-        $stack = Get-PSCallStack | % {$_.Command} | ? {$_ -notin ("<ScriptBlock>", "Write-Log")}
-        if ($stack) {
-            [array]::reverse($stack)
-            $stack = " | $($stack -join " > ")"
-        }
-        $timestamp = Get-Date -Format "T"
-    }
-
-    # write the input $Message with formatting to the Information stream
-    process {
-        $Message = ($Message | Format-List | Out-String) -split "[\r\n]+" | ? {$_}
-        $Message | % {Write-Information "[$timestamp$stack] $_" -InformationAction Continue}
-    }
-
-}
 
 
 
@@ -79,6 +25,20 @@ class ClusterResourceGroup {
 
     # Indentity vector (path through the service tree)
     [string[]]$Identity
+
+    # where region-agnostic resources are defined
+    static [string] $DefaultRegion = "West US 2"
+        
+    # string preceding a random string on underlying resource names
+    static [string] $DefaultResourcePrefix = "cluster"
+
+    # name of the blob storage container containing service artifacts
+    static [string] $ArtifactContainerName = "artifacts"
+
+    # name of the blob storage container containing VM images
+    static [string] $ImageContainerName = "images"
+
+
 
 
     # create a ClusterResourceGroup model object from its resource group name
@@ -95,7 +55,7 @@ class ClusterResourceGroup {
         # determine if this resource group has a speified region (for Environments and Clusters)
         $region = @{
             $True  = $this.Identity[2]
-            $False = $script:DefaultRegion
+            $False = [ClusterResourceGroup]::DefaultRegion
         }[$this.Identity.Count -ge 3]
 
         # create and initialize the Azure resources
@@ -113,10 +73,10 @@ class ClusterResourceGroup {
             -Location $region
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
-            -Name $script:ArtifactContainerName
+            -Name [ClusterResourceGroup]::ArtifactContainerName
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
-            -Name $script:ImageContainerName
+            -Name [ClusterResourceGroup]::ImageContainerName
 
         # if the resource group has a parent (isn't a 'Service'), propagate assets from parent to this
         $parentId = ($this.Identity | Select -SkipLast 1) -join "-"
@@ -170,18 +130,18 @@ class ClusterResourceGroup {
         New-BakedImage `
             -StorageContext $this.GetStorageContext() `
             -WindowsFeature $WindowsFeature `
-            -StorageContainer $script:ImageContainerName
+            -StorageContainer [ClusterResourceGroup]::ImageContainerName
     }
 
 
     # pushes Artifacts from this service tree node to its descendants
     [void] PropagateArtifacts() {
-        $this.PropagateBlobs($script:ArtifactContainerName)
+        $this.PropagateBlobs([ClusterResourceGroup]::ArtifactContainerName)
     }
 
     # pushes Images from this service tree node to its descendants
     [void] PropagateImages() {
-        $this.PropagateBlobs($script:ImageContainerName)
+        $this.PropagateBlobs([ClusterResourceGroup]::ImageContainerName)
     }
 
     # pushes Blobs in the specified container from this service tree node to its descendants
@@ -282,7 +242,7 @@ class ClusterResourceGroup {
     [void] UploadArtifact([string] $ArtifactPath) {
         Set-AzureStorageBlobContent `
             -File $ArtifactPath `
-            -Container $script:ArtifactContainerName `
+            -Container [ClusterResourceGroup]::ArtifactContainerName `
             -Blob (Split-Path -Path $ArtifactPath -Leaf) `
             -Context $this.GetStorageContext() `
             -Force
@@ -293,10 +253,10 @@ class ClusterResourceGroup {
     static [string] NewResourceName() {
         $Length = 24
         $allowedChars = "abcdefghijklmnopqrstuvwxyz0123456789"
-        $chars = 1..($Length - $script:DefaultResourcePrefix.Length) `
+        $chars = 1..($Length - [ClusterResourceGroup]::DefaultResourcePrefix.Length) `
             | % {Get-Random -Maximum $allowedChars.Length} `
             | % {$allowedChars[$_]}
-        return $script:DefaultResourcePrefix + ($chars -join '')
+        return [ClusterResourceGroup]::DefaultResourcePrefix + ($chars -join '')
     }
 
 }
@@ -471,7 +431,7 @@ class Cluster : ClusterResourceGroup {
         # baked Windows Image URL
         $images = Get-AzureStorageBlob `
             -Context $this.GetStorageContext() `
-            -Container $script:ImageContainerName
+            -Container [ClusterResourceGroup]::ImageContainerName
         if ($images) {
             $imageName = $images | Sort LastModified -Descending | Select -First 1 | % Name
             $sasToken = New-AzureStorageContainerSASToken `
