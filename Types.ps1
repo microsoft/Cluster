@@ -73,10 +73,10 @@ class ClusterResourceGroup {
             -Location $region
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
-            -Name [ClusterResourceGroup]::ArtifactContainerName
+            -Name ([ClusterResourceGroup]::ArtifactContainerName)
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
-            -Name [ClusterResourceGroup]::ImageContainerName
+            -Name ([ClusterResourceGroup]::ImageContainerName)
 
         # if the resource group has a parent (isn't a 'Service'), propagate assets from parent to this
         $parentId = ($this.Identity | Select -SkipLast 1) -join "-"
@@ -130,7 +130,7 @@ class ClusterResourceGroup {
         New-BakedImage `
             -StorageContext $this.GetStorageContext() `
             -WindowsFeature $WindowsFeature `
-            -StorageContainer [ClusterResourceGroup]::ImageContainerName
+            -StorageContainer ([ClusterResourceGroup]::ImageContainerName)
     }
 
 
@@ -242,7 +242,7 @@ class ClusterResourceGroup {
     [void] UploadArtifact([string] $ArtifactPath) {
         Set-AzureStorageBlobContent `
             -File $ArtifactPath `
-            -Container [ClusterResourceGroup]::ArtifactContainerName `
+            -Container ([ClusterResourceGroup]::ArtifactContainerName) `
             -Blob (Split-Path -Path $ArtifactPath -Leaf) `
             -Context $this.GetStorageContext() `
             -Force
@@ -431,7 +431,7 @@ class Cluster : ClusterResourceGroup {
         # baked Windows Image URL
         $images = Get-AzureStorageBlob `
             -Context $this.GetStorageContext() `
-            -Container [ClusterResourceGroup]::ImageContainerName
+            -Container ([ClusterResourceGroup]::ImageContainerName)
         if ($images) {
             $imageName = $images | Sort LastModified -Descending | Select -First 1 | % Name
             $sasToken = New-AzureStorageContainerSASToken `

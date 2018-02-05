@@ -55,7 +55,7 @@ Describe "Cluster types" {
                 ( {$Service.UploadArtifact("$env:TEMP\sampleblob.txt")} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $Service.GetStorageContext() `
-                    -Container $ArtifactContainerName `
+                    -Container ([ClusterResourceGroup]::ArtifactContainerName) `
                     -Blob "sampleblob.txt" `
                     -Destination "$env:TEMP\sampleblob2.txt" `
                     -Force
@@ -66,7 +66,7 @@ Describe "Cluster types" {
                 ( {$Service.PropagateArtifacts()} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $Environment.GetStorageContext() `
-                    -Container $ArtifactContainerName `
+                    -Container ([ClusterResourceGroup]::ArtifactContainerName) `
                     -Blob "sampleblob.txt" `
                     -Destination "$env:TEMP\sampleblob3.txt" `
                     -Force
