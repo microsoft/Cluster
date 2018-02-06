@@ -213,7 +213,7 @@ function New-Cluster {
         $Environment = [ClusterEnvironment]::new("$ServiceName-$FlightingRingName-$RegionName")
     }
     $cluster = $Environment.NewChildCluster()
-    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry) | Write-Log
+    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
     return $cluster
 }
 
@@ -558,7 +558,7 @@ function Publish-ClusterConfiguration {
         [datetime]$Expiry = [datetime]::MaxValue
     )
 
-    $Cluster.PublishConfiguration($DefinitionsContainer, $Expiry) | Write-Log
+    $Cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
 }
 
 

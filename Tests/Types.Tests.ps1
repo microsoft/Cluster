@@ -55,7 +55,7 @@ Describe "Cluster types" {
                 ( {$Service.UploadArtifact("$env:TEMP\sampleblob.txt")} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $Service.GetStorageContext() `
-                    -Container $ArtifactContainerName `
+                    -Container ([ClusterResourceGroup]::ArtifactContainerName) `
                     -Blob "sampleblob.txt" `
                     -Destination "$env:TEMP\sampleblob2.txt" `
                     -Force
@@ -66,7 +66,7 @@ Describe "Cluster types" {
                 ( {$Service.PropagateArtifacts()} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $Environment.GetStorageContext() `
-                    -Container $ArtifactContainerName `
+                    -Container ([ClusterResourceGroup]::ArtifactContainerName) `
                     -Blob "sampleblob.txt" `
                     -Destination "$env:TEMP\sampleblob3.txt" `
                     -Force
@@ -95,11 +95,11 @@ Describe "Cluster types" {
 
             $clusterA = $Environment.NewChildCluster()
             $clusterAInitialDeployment = $clusterA.PublishConfiguration($configs, $expiry)
-            $clusterAInitialDeployment | Write-Log
+            $clusterAInitialDeployment
 
             $clusterB = $Environment.NewChildCluster()
             $clusterBInitialDeployment = $clusterB.PublishConfiguration($configs, $expiry)
-            $clusterB | Write-Log
+            $clusterB
 
             $clusterARedeployment = $clusterA.PublishConfiguration($configs, $expiry)
             $clusterBRedeployment = $clusterB.PublishConfiguration($configs, $expiry)
