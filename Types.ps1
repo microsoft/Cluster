@@ -146,11 +146,11 @@ class ClusterResourceGroup {
 
     # pushes Blobs in the specified container from this service tree node to its descendants
     [void] PropagateBlobs([string] $Container) {
-        $children = $this.GetDescendants()
-        if (-not $children) {
+        $descendants = $this.GetDescendants()
+        if (-not $descendants) {
             return
         }
-        $childContexts = $children.GetStorageContext()
+        $descendantContexts = $descendants.GetStorageContext()
         $artifactNames = Get-AzureStorageBlob `
             -Container $Container `
             -Context $this.GetStorageContext() `
@@ -158,22 +158,22 @@ class ClusterResourceGroup {
         
         # async start copying blobs
         $pendingBlobs = [ArrayList]::new()
-        foreach ($childContext in $childContexts) {
+        foreach ($descendantContext in $descendantContexts) {
             foreach ($artifactName in $artifactNames) {
-                $childBlob = Get-AzureStorageBlob `
-                    -Context $childContext `
+                $descendantBlob = Get-AzureStorageBlob `
+                    -Context $descendantContext `
                     -Container $Container `
                     -Blob $artifactName `
                     -ErrorAction SilentlyContinue
-                if (-not $childBlob) {
-                    $childBlob = Start-AzureStorageBlobCopy `
+                if (-not $descendantBlob) {
+                    $descendantBlob = Start-AzureStorageBlobCopy `
                         -Context $this.GetStorageContext() `
-                        -DestContext $childContext `
+                        -DestContext $descendantContext `
                         -SrcContainer $Container `
                         -DestContainer $Container `
                         -SrcBlob $artifactName `
                         -DestBlob $artifactName
-                    $pendingBlobs.Add($childBlob)
+                    $pendingBlobs.Add($descendantBlob)
                 }
             }
         }
@@ -186,24 +186,21 @@ class ClusterResourceGroup {
                 -Blob $blob.Name `
                 -WaitForComplete
         }
-
-        # push from the children node to their children
-        $children.PropagateBlobs($Container)
     }
 
 
     # pushes Azure Key Vault Secrets from this service tree node to its descendants
     [void] PropagateSecrets() {
-        $children = $this.GetChildren()
-        if (-not $children) { 
+        $descendants = $this.GetDescendants()
+        if (-not $descendants) { 
             return
         }
         $keyVaultName = (Get-AzureRmKeyVault -ResourceGroupName $this).VaultName
-        $childKeyVaultNames = $children `
+        $descendantKeyVaultNames = $descendants `
             | % {Get-AzureRmKeyVault -ResourceGroupName $_} `
             | % {$_.VaultName}
         $secretNames = (Get-AzureKeyVaultSecret -VaultName $keyVaultName).Name
-        foreach ($childKeyVaultName in $childKeyVaultNames) {
+        foreach ($childKeyVaultName in $descendantKeyVaultNames) {
             foreach ($secretName in $secretNames) {
                 $secret = Get-AzureKeyVaultSecret `
                     -VaultName $keyVaultName `
@@ -215,7 +212,6 @@ class ClusterResourceGroup {
                     -ContentType $secret.Attributes.ContentType
             }
         }
-        $children.PropagateSecrets()
     }
 
 
