@@ -38,6 +38,8 @@ class ClusterResourceGroup {
     # name of the blob storage container containing VM images
     static [string] $ImageContainerName = "images"
 
+    # underlying property for lazily instantiating Azure Storage Contexts
+    hidden [IStorageContext] $_StorageContext
 
 
 
@@ -107,18 +109,19 @@ class ClusterResourceGroup {
         return @($children)
     }
 
-    # returns a model for each descendant service tree node that has been provisioned in Azure
-    [ClusterResourceGroup[]] GetDescendants() {
-        $children = $this.GetChildren()
-        return $children + ($children | % {$_.GetDescendants()})
+    # returns a model for each descendant service tree node (not leaves/Clusters) that has been provisioned in Azure
+    [ClusterResourceGroup[]] GetDescendantNodes() {
+        $descendants = Get-AzureRmResourceGroup `
+            | % {$_.ResourceGroupName} `
+            | ? {$_ -like "$this*" -and ($_ -split '-').Count -le 3} `
+            | % {[ClusterResourceGroup]::new($_)}
+        return @($descendants)
     }
 
     # lazily instantiates an Azure Storage Context for use with the Azure.Storage module
-    [IStorageContext]$_StorageContext
     [IStorageContext] GetStorageContext() {
         if (-not $this._StorageContext) {
-            $storageAccount = Get-AzureRmStorageAccount `
-                -ResourceGroupName $this
+            $storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $this
             $this._StorageContext = $storageAccount.Context
         }
         return $this._StorageContext
@@ -146,7 +149,7 @@ class ClusterResourceGroup {
 
     # pushes Blobs in the specified container from this service tree node to its descendants
     [void] PropagateBlobs([string] $Container) {
-        $descendants = $this.GetDescendants()
+        $descendants = $this.GetDescendantNodes()
         if (-not $descendants) {
             return
         }
@@ -191,7 +194,7 @@ class ClusterResourceGroup {
 
     # pushes Azure Key Vault Secrets from this service tree node to its descendants
     [void] PropagateSecrets() {
-        $descendants = $this.GetDescendants()
+        $descendants = $this.GetDescendantNodes()
         if (-not $descendants) { 
             return
         }
@@ -245,7 +248,7 @@ class ClusterResourceGroup {
     }
 
 
-    # creates a base36 GUID with a (module declared) prefix and valid length for creating globally unique Azure resource names
+    # creates a base36 GUID with a prefix and valid length for creating globally unique Azure resource names
     static [string] NewResourceName() {
         $Length = 24
         $allowedChars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -277,6 +280,11 @@ class ClusterService : ClusterResourceGroup {
 
 
 
+
+
+
+
+
 class ClusterFlightingRing : ClusterResourceGroup {
     [ValidateNotNullOrEmpty()]
     [ClusterService]$Service
@@ -290,6 +298,9 @@ class ClusterFlightingRing : ClusterResourceGroup {
     }
 
 }
+
+
+
 
 
 
@@ -321,6 +332,10 @@ class ClusterEnvironment : ClusterResourceGroup {
 
 
 
+
+
+
+
 class Cluster : ClusterResourceGroup {
     [ValidateNotNullOrEmpty()]
     [ClusterEnvironment]$Environment
@@ -335,7 +350,14 @@ class Cluster : ClusterResourceGroup {
 
     # create a service tree node resource group and resources, with additional Clsuter-specific resources
     [void] Create() {
-        ([ClusterResourceGroup]$this).Create()
+        New-AzureRmResourceGroup -Name $this -Location $this.Environment.Region
+        New-AzureRmStorageAccount `
+            -ResourceGroupName $this `
+            -Name ([ClusterResourceGroup]::NewResourceName()) `
+            -Location $this.Environment.Region `
+            -Type "Standard_LRS" `
+            -EnableEncryptionService "blob" `
+            -EnableHttpsTrafficOnly $true
         New-AzureStorageContainer `
             -Context $this.GetStorageContext() `
             -Name "configuration"
@@ -361,7 +383,7 @@ class Cluster : ClusterResourceGroup {
 
         # build url components
         $vhdContainer = "$($context.BlobEndpoint)disks/"
-        $sasToken = New-AzureStorageContainerSASToken `
+        $configurationSasToken = New-AzureStorageContainerSASToken `
             -Context $context `
             -Container "configuration" `
             -Permission "r" `
@@ -373,7 +395,7 @@ class Cluster : ClusterResourceGroup {
             TemplateFile      = $this.GetConfig($DefinitionsContainer, "template.json")
             Environment       = $this.Environment
             VhdContainer      = $vhdContainer
-            SasToken          = $sasToken
+            SasToken          = $configurationSasToken
         }
 
         # package and upload DSC
@@ -424,18 +446,14 @@ class Cluster : ClusterResourceGroup {
             $deploymentParams["ConfigJson"] = Get-Content $configJsonFile -Raw
         }
 
-        # baked Windows Image URL
+        # baked Windows Image URL (from parent Environment)
+        $environmentContext = $this.Environment.GetStorageContext()
         $images = Get-AzureStorageBlob `
-            -Context $this.GetStorageContext() `
+            -Context $environmentContext `
             -Container ([ClusterResourceGroup]::ImageContainerName)
         if ($images) {
             $imageName = $images | Sort LastModified -Descending | Select -First 1 | % Name
-            $sasToken = New-AzureStorageContainerSASToken `
-                -Context $context `
-                -Container "images" `
-                -Permission "r" `
-                -ExpiryTime $expiry
-            $deploymentParams["ImageUrl"] = "$($context.BlobEndPoint)images/$imageName$sasToken"
+            $deploymentParams["ImageUrl"] = "$($environmentContext.BlobEndPoint)images/$imageName"
         }
 
         # deploy template
