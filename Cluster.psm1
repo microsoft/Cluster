@@ -213,8 +213,12 @@ function New-Cluster {
         $Environment = [ClusterEnvironment]::new("$ServiceName-$FlightingRingName-$RegionName")
     }
     $cluster = $Environment.NewChildCluster()
-    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
-    return $cluster
+    $deployment = $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
+    if ($deployment.ProvisioningState -eq "Succeeded") {
+        return $cluster
+    } else {
+        throw ($deployment | Out-String)
+    }
 }
 
 

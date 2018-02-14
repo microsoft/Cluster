@@ -67,7 +67,7 @@ Describe "Cluster cmdlets" {
                 ( {Publish-ClusterArtifact -ClusterSet $service -Path $artifactPath} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $environment.GetStorageContext() `
-                    -Container $ArtifactContainerName `
+                    -Container ([ClusterResourceGroup]::ArtifactContainerName) `
                     -Blob (Split-Path $artifactPath -Leaf) `
                     -Destination "$env:TEMP\sampleblob1.txt" `
                     -Force
