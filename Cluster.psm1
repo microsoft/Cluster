@@ -204,7 +204,7 @@ function New-Cluster {
         [ValidateNotNullOrEmpty()]
         [ClusterEnvironment]$Environment,
         [ValidateScript( {Test-Path $_} )]
-        [string]$DefinitionsContainer = (Resolve-Path "."),
+        [string]$DefinitionsContainer,
         [ValidateNotNullOrEmpty()]
         [datetime]$Expiry = [datetime]::MaxValue
     )
@@ -557,7 +557,7 @@ function Publish-ClusterConfiguration {
         [ValidateNotNullOrEmpty()]
         [Cluster[]]$Cluster,
         [ValidateScript( {Test-Path $_} )]
-        [string]$DefinitionsContainer = (Resolve-Path "."),
+        [string]$DefinitionsContainer,
         [ValidateNotNullOrEmpty()]
         [datetime]$Expiry = [datetime]::MaxValue
     )
