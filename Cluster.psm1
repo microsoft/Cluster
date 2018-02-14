@@ -204,7 +204,7 @@ function New-Cluster {
         [ValidateNotNullOrEmpty()]
         [ClusterEnvironment]$Environment,
         [ValidateScript( {Test-Path $_} )]
-        [string]$DefinitionsContainer = (Resolve-Path "."),
+        [string]$DefinitionsContainer,
         [ValidateNotNullOrEmpty()]
         [datetime]$Expiry = [datetime]::MaxValue
     )
@@ -213,8 +213,12 @@ function New-Cluster {
         $Environment = [ClusterEnvironment]::new("$ServiceName-$FlightingRingName-$RegionName")
     }
     $cluster = $Environment.NewChildCluster()
-    $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
-    return $cluster
+    $deployment = $cluster.PublishConfiguration($DefinitionsContainer, $Expiry)
+    if ($deployment.ProvisioningState -eq "Succeeded") {
+        return $cluster
+    } else {
+        throw ($deployment | Out-String)
+    }
 }
 
 
@@ -553,7 +557,7 @@ function Publish-ClusterConfiguration {
         [ValidateNotNullOrEmpty()]
         [Cluster[]]$Cluster,
         [ValidateScript( {Test-Path $_} )]
-        [string]$DefinitionsContainer = (Resolve-Path "."),
+        [string]$DefinitionsContainer,
         [ValidateNotNullOrEmpty()]
         [datetime]$Expiry = [datetime]::MaxValue
     )

@@ -67,7 +67,7 @@ Describe "Cluster cmdlets" {
                 ( {Publish-ClusterArtifact -ClusterSet $service -Path $artifactPath} ) | Should -Not -Throw
                 Get-AzureStorageBlobContent `
                     -Context $environment.GetStorageContext() `
-                    -Container $ArtifactContainerName `
+                    -Container ([ClusterResourceGroup]::ArtifactContainerName) `
                     -Blob (Split-Path $artifactPath -Leaf) `
                     -Destination "$env:TEMP\sampleblob1.txt" `
                     -Force
@@ -93,7 +93,6 @@ Describe "Cluster cmdlets" {
             It "Can create clusters" {
                 @(Get-AzureRmResourceGroup -Name $cluster).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $cluster).Count | Should -Be 1
-                @(Get-AzureRmKeyVault -ResourceGroupName $cluster).Count | Should -Be 1
             }
 
             It "Can publish new Cluster configurations" {
@@ -137,8 +136,8 @@ Describe "Cluster cmdlets" {
     } finally {
 
         # cleanup
-
         $service, $flightingRing, $environment, $cluster `
+            | ? {$_} `
             | % {Remove-AzureRmResourceGroup -Name $_ -Force} `
             | Out-Null
         "sampleblob.txt", "sampleblob2.txt", "sampleblob3.txt" `
