@@ -457,11 +457,17 @@ class Cluster : ClusterResourceGroup {
         }
 
         # deploy template
-        return New-AzureRmResourceGroupDeployment `
+        $deploymentErrors = $null # redundantly define for linting
+        $deployment = New-AzureRmResourceGroupDeployment `
             -Name ((Get-Date -Format "s") -replace "[^\d]") `
             @deploymentParams `
             -Verbose `
+            -ErrorVariable deploymentErrors `
             -Force
+        if ($deploymentErrors) {
+            throw $deploymentErrors
+        }
+        return $deployment
     }
 
 }
