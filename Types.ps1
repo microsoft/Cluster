@@ -312,6 +312,9 @@ class ClusterEnvironment : ClusterResourceGroup {
     [ValidatePattern("^[A-z][A-z0-9 ]+$")]
     [string]$Region
 
+    static [int] $TTL = 5
+    static [string] $MonitorPath = "/"
+
     ClusterEnvironment([string] $resourceGroupName) : base($resourceGroupName) {
         $this.FlightingRing = [ClusterFlightingRing]::new($this.Identity[0..1] -join "-")
         $this.Region = $this.Identity | Select -Last 1
@@ -326,6 +329,18 @@ class ClusterEnvironment : ClusterResourceGroup {
         return $cluster # return the Cluster model
     }
 
+    [void] Create() {
+        ([ClusterResourceGroup]$this).Create()
+        New-AzureRmTrafficManagerProfile `
+            -Name "Profile" `
+            -ResourceGroupName $this `
+            -TrafficRoutingMethod Weighted `
+            -RelativeDnsName ([ClusterResourceGroup]::NewResourceName()) `
+            -Ttl ([ClusterEnvironment]::TTL) `
+            -MonitorProtocol HTTP `
+            -MonitorPort 80 `
+            -MonitorPath ([ClusterEnvironment]::MonitorPath)
+    }
 }
 
 
