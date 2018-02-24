@@ -42,6 +42,7 @@ Describe "Cluster types" {
                 @(Get-AzureRmResourceGroup -Name $Environment).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $Environment).Count | Should -Be 1
                 @(Get-AzureRmKeyVault -ResourceGroupName $Environment).Count | Should -Be 1
+                @(Get-AzureRmTrafficManagerProfile -ResourceGroupName $Environment).Count | Should -Be 1
             }
         }
 

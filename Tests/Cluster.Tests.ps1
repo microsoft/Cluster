@@ -57,6 +57,7 @@ Describe "Cluster cmdlets" {
                 @(Get-AzureRmResourceGroup -Name $environment).Count | Should -Be 1
                 @(Get-AzureRmStorageAccount -ResourceGroupName $environment).Count | Should -Be 1
                 @(Get-AzureRmKeyVault -ResourceGroupName $environment).Count | Should -Be 1
+                @(Get-AzureRmTrafficManagerProfile -ResourceGroupName $Environment).Count | Should -Be 1
             }
         }
 
